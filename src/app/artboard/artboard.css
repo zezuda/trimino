@@ -80,3 +80,22 @@
   vector-effect: non-scaling-stroke;
   cursor: grab;
 }
+
+/* Sheet centre line the dragged selection is snapped to. */
+.guide {
+  stroke: var(--guide);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.marquee {
+  fill: var(--accent);
+  fill-opacity: 0.08;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}

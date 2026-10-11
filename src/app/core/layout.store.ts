@@ -23,7 +23,9 @@ export class LayoutStore {
   readonly customSize = signal<SheetSize>(presetSize('A4', 'portrait'));
   /** Array order is the stacking order (last = on top). */
   readonly placements = signal<readonly Placement[]>([]);
-  readonly selected = signal<number | null>(null);
+  readonly selection = signal<ReadonlySet<number>>(new Set());
+  /** The selected piece when exactly one is selected, else null. */
+  readonly single = computed(() => (this.selection().size === 1 ? [...this.selection()][0] : null));
 
   readonly sheet = computed<SheetSize>(() =>
     this.preset() === 'custom' ? this.customSize() : presetSize(this.preset() as Exclude<PaperPreset, 'custom'>, this.orientation()),
@@ -46,7 +48,7 @@ export class LayoutStore {
   /** Shows a new document with every piece where it was on the source page, centred on the sheet. */
   load(doc: SourceDocument): void {
     this.source.set(doc);
-    this.selected.set(null);
+    this.clearSelection();
     this.resetLayout();
   }
 
@@ -154,16 +156,66 @@ export class LayoutStore {
   }
 
   /**
-   * Selects a piece, optionally raising it to the top of the stack. Keyboard focus does
-   * not raise: re-ordering the DOM would drop focus from the element being focused.
+   * Replaces the selection, optionally raising the pieces to the top of the stack (in
+   * their current order). Keyboard focus does not raise: re-ordering the DOM would drop
+   * focus from the element being focused.
    */
-  select(index: number | null, raise = false): void {
-    this.selected.set(index);
-    if (index === null || !raise) return;
-    this.placements.update((list) => {
-      const p = list.find((x) => x.index === index);
-      return p && list[list.length - 1] !== p ? [...list.filter((x) => x !== p), p] : list;
-    });
+  select(indexes: Iterable<number>, raise = false): void {
+    const set = new Set(indexes);
+    this.selection.set(set);
+    if (!raise || set.size === 0) return;
+    this.placements.update((list) => [...list.filter((p) => !set.has(p.index)), ...list.filter((p) => set.has(p.index))]);
+  }
+
+  toggle(index: number): void {
+    const set = new Set(this.selection());
+    if (!set.delete(index)) set.add(index);
+    this.selection.set(set);
+  }
+
+  clearSelection(): void {
+    if (this.selection().size) this.selection.set(new Set());
+  }
+
+  selectAll(): void {
+    this.selection.set(new Set(this.placements().map((p) => p.index)));
+  }
+
+  /** Sets several centre positions in one update (group drag). */
+  setPositions(positions: ReadonlyMap<number, { x: number; y: number }>): void {
+    this.placements.update((list) => list.map((p) => (positions.has(p.index) ? { ...p, ...positions.get(p.index)! } : p)));
+  }
+
+  moveSelection(dx: number, dy: number): void {
+    const sel = this.selection();
+    this.placements.update((list) => list.map((p) => (sel.has(p.index) ? { ...p, x: p.x + dx, y: p.y + dy } : p)));
+  }
+
+  /**
+   * Rotates the selection as one rigid block around the mean of the piece centres, so
+   * an assembled group stays assembled. A single piece just turns in place.
+   */
+  rotateSelection(deg: number): void {
+    const sel = this.selection();
+    const chosen = this.placements().filter((p) => sel.has(p.index));
+    if (chosen.length === 0) return;
+    const cx = chosen.reduce((a, p) => a + p.x, 0) / chosen.length;
+    const cy = chosen.reduce((a, p) => a + p.y, 0) / chosen.length;
+    const r = (deg * Math.PI) / 180;
+    const cos = Math.cos(r);
+    const sin = Math.sin(r);
+    this.placements.update((list) =>
+      list.map((p) =>
+        sel.has(p.index)
+          ? {
+              ...p,
+              x: cx + (p.x - cx) * cos - (p.y - cy) * sin,
+              y: cy + (p.x - cx) * sin + (p.y - cy) * cos,
+              rotation: normaliseAngle(p.rotation + deg),
+            }
+          : p,
+      ),
+    );
   }
 
   placementOf(index: number): Placement | undefined {

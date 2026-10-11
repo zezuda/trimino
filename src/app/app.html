@@ -134,14 +134,16 @@
 
   @if (store.source()) {
     <div class="selection" aria-label="Vybraný dílek" role="toolbar">
-      @if (selectedPlacement(); as p) {
-        <strong>Dílek {{ p.index + 1 }}</strong>
+      @if (store.selection().size) {
+        <strong>{{ selectionLabel() }}</strong>
         <button type="button" class="btn icon" (click)="rotateSelected(-ROTATE_STEP)" [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doleva'">⟲</button>
         <button type="button" class="btn icon" (click)="rotateSelected(ROTATE_STEP)" [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doprava'">⟳</button>
-        <label class="angle">
-          <span class="visually-hidden">Otočení ve stupních</span>
-          <input #angle type="number" step="15" [value]="p.rotation" (change)="setRotation(angle.value)" />°
-        </label>
+        @if (selectedPlacement(); as p) {
+          <label class="angle">
+            <span class="visually-hidden">Otočení ve stupních</span>
+            <input #angle type="number" step="15" [value]="p.rotation" (change)="setRotation(angle.value)" />°
+          </label>
+        }
         <span class="nudge">
           <button type="button" class="btn icon" (click)="nudge(-1, 0)" [attr.aria-label]="'Posunout doleva o ' + NUDGE_MM + ' mm'">←</button>
           <button type="button" class="btn icon" (click)="nudge(0, -1)" [attr.aria-label]="'Posunout nahoru o ' + NUDGE_MM + ' mm'">↑</button>
@@ -149,7 +151,7 @@
           <button type="button" class="btn icon" (click)="nudge(1, 0)" [attr.aria-label]="'Posunout doprava o ' + NUDGE_MM + ' mm'">→</button>
         </span>
       } @else {
-        <span class="hint">Vyberte dílek</span>
+        <span class="hint">Vyberte dílky</span>
       }
     </div>
     <app-artboard />

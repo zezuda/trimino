@@ -18,11 +18,16 @@ npm run build      # static files in dist/trimino/browser
 1. **Nahrát PDF** – the triangles are detected and shown on the sheet where they were in the original,
    each with its number (the number is not printed).
 2. Arrange the pieces:
-   - **drag** a piece to move it; its corners snap to neighbouring corners (hold **Alt** to turn snapping off);
-   - **drag the round handle** of the selected piece to rotate it in 15° steps (hold **Shift** for any angle);
-   - **keyboard** – Tab to a piece, arrows move it 1 mm (**Shift** = 10 mm), **R** / **Shift+R** rotates by ±60°,
-     **Esc** deselects;
-   - the bar above the sheet does the same with buttons (±60°, exact angle, 5 mm nudges).
+   - **select**: click a piece; **Shift+click** adds/removes it; **drag on an empty spot** draws a
+     selection box (Shift adds to the current selection) – a piece is caught when its centre is inside
+     the box, so neighbours that only touch it in a dense layout are not; **Ctrl/Cmd+A** selects all;
+   - **drag** a selected piece to move the whole selection. Corners snap to corners of the other pieces;
+     otherwise the centre of the selection snaps to the sheet's vertical and horizontal centre line (a
+     dashed guide shows it). Hold **Alt** to turn snapping off;
+   - **drag the round handle** (single piece only) to rotate it in 15° steps (hold **Shift** for any angle);
+   - **keyboard** – Tab to a piece, arrows move the selection 1 mm (**Shift** = 10 mm), **R** / **Shift+R**
+     rotates it by ±60° as one block (an assembled group stays assembled), **Esc** deselects;
+   - the bar above the sheet does the same with buttons (±60°, exact angle for a single piece, 5 mm nudges).
    Pieces reaching outside the sheet get a red dashed outline and are counted as "mimo arch".
 3. **Arch** – paper size: A5, A4, A3, Letter or **Vlastní** (custom width × height in mm, 50–1500 mm).
    **Na výšku / Na šířku** – orientation (for a custom size it swaps width and height). Changing the
@@ -71,4 +76,4 @@ Limits: scanned (raster-only) PDFs have no vector lines and are not supported; a
 | `core/layout.store.ts` | Signals: document, placements, paper size, orientation, selection. |
 | `core/template.service.ts` | Template storage, JSON import validation. |
 | `core/models.ts` | Types and the coordinate spaces (user / view / sheet). |
-| `artboard/` | The SVG sheet: drag, rotate handle, snapping, keyboard. |
+| `artboard/` | The SVG sheet: selection box, group drag, rotate handle, corner and centre snapping, keyboard. |

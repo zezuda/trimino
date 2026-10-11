@@ -40,11 +40,17 @@ export class App {
     height: Math.round(this.store.sheet().height / MM),
   }));
   protected readonly NUDGE_MM = NUDGE_MM;
+  protected readonly selectionLabel = computed(() => {
+    const single = this.store.single();
+    if (single !== null) return `Dílek ${single + 1}`;
+    const n = this.store.selection().size;
+    return `${n} ${n >= 2 && n <= 4 ? 'dílky' : 'dílků'}`;
+  });
+  /** The selected placement when exactly one piece is selected (for the angle input). */
   protected readonly selectedPlacement = computed(() => {
-    const i = this.store.selected();
+    const i = this.store.single();
     return i === null ? undefined : this.store.placements().find((p) => p.index === i);
   });
-
   protected async onPdf(input: HTMLInputElement): Promise<void> {
     const file = input.files?.[0];
     input.value = '';
@@ -133,8 +139,7 @@ export class App {
   }
 
   protected rotateSelected(delta: number): void {
-    const p = this.selectedPlacement();
-    if (p) this.store.update(p.index, { rotation: p.rotation + delta });
+    this.store.rotateSelection(delta);
   }
 
   protected setRotation(value: string): void {
@@ -144,8 +149,7 @@ export class App {
   }
 
   protected nudge(dx: number, dy: number): void {
-    const p = this.selectedPlacement();
-    if (p) this.store.update(p.index, { x: p.x + dx * NUDGE_MM * MM, y: p.y + dy * NUDGE_MM * MM });
+    this.store.moveSelection(dx * NUDGE_MM * MM, dy * NUDGE_MM * MM);
   }
 
   protected setCustomSize(widthMm: string, heightMm: string): void {

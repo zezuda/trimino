@@ -14,7 +14,7 @@
 
   @for (p of store.placements(); track p.index) {
     @let piece = pieces()[p.index];
-    @let isSelected = store.selected() === p.index;
+    @let isSelected = store.selection().has(p.index);
     <g
       class="piece"
       [class.selected]="isSelected"
@@ -26,8 +26,8 @@
       [attr.aria-label]="label(p)"
       [attr.aria-pressed]="isSelected"
       (pointerdown)="onPieceDown($event, p.index)"
-      (focus)="store.select(p.index)"
-      (keydown)="onKey($event, p.index)"
+      (focus)="onPieceFocus(p.index)"
+      (keydown)="onKey($event)"
     >
       <image
         [attr.href]="piece.imageUrl"
@@ -39,7 +39,7 @@
       />
       <polygon class="outline" [attr.points]="localPoints(piece)" />
       <text class="badge" aria-hidden="true" y="4">{{ p.index + 1 }}</text>
-      @if (isSelected) {
+      @if (store.single() === p.index) {
         <line class="handle-arm" x1="0" y1="0" x2="0" [attr.y2]="-handleOffset(piece)" />
         <circle
           class="handle"
@@ -53,5 +53,15 @@
       }
     </g>
   }
+
+  @if (guides().vertical) {
+    <line class="guide" [attr.x1]="store.sheet().width / 2" y1="0" [attr.x2]="store.sheet().width / 2" [attr.y2]="store.sheet().height" />
+  }
+  @if (guides().horizontal) {
+    <line class="guide" x1="0" [attr.y1]="store.sheet().height / 2" [attr.x2]="store.sheet().width" [attr.y2]="store.sheet().height / 2" />
+  }
+  @if (marquee(); as m) {
+    <rect class="marquee" [attr.x]="m.x" [attr.y]="m.y" [attr.width]="m.width" [attr.height]="m.height" />
+  }
 </svg>
-<p id="artboard-help" class="visually-hidden">Šipky posun, R otočení o 60°.</p>
+<p id="artboard-help" class="visually-hidden">Šipky posun, R otočení o 60°, Ctrl+A vybrat vše.</p>

@@ -1,4 +1,4 @@
-import { Component, ElementRef, afterNextRender, computed, inject, viewChild, Injector } from '@angular/core';
+import { Component, ElementRef, afterNextRender, computed, inject, signal, viewChild, Injector } from '@angular/core';
 import { Point, distance } from '../core/geometry';
 import { LayoutStore } from '../core/layout.store';
 import { MM, Piece, Placement } from '../core/models';
@@ -7,18 +7,37 @@ import { placedTriangle } from '../core/placement';
 /** Snap distance in screen pixels (converted to sheet units on the fly). */
 const SNAP_PX = 12;
 const ROTATE_SNAP_DEG = 15;
+/** Below this many screen pixels a background drag counts as a click. */
+const CLICK_PX = 3;
 /** Keyboard / button rotation step: 60° keeps equilateral pieces on the same grid. */
 export const ROTATE_STEP = 60;
 
 type Drag =
-  | { kind: 'move'; index: number; offset: Point; pointerId: number }
-  | { kind: 'rotate'; index: number; pointerId: number };
+  | { kind: 'move'; start: Point; origins: ReadonlyMap<number, Point>; pointerId: number }
+  | { kind: 'rotate'; index: number; pointerId: number }
+  | { kind: 'marquee'; start: Point; base: ReadonlySet<number>; pointerId: number };
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /**
- * The sheet with the pieces. Pointer: drag a piece to move it (corners snap to
- * neighbouring corners, Alt disables), drag the round handle to rotate (15° steps,
- * Shift for free angle). Keyboard: arrows move by 1 mm (Shift 10 mm), R / Shift+R
- * rotate by 60°. The selection toolbar in the app offers the same without dragging.
+ * The sheet with the pieces.
+ *
+ * Pointer: click selects a piece, Shift+click adds/removes it; dragging on an empty spot
+ * draws a selection box (Shift adds to the selection) — a piece is caught when its centre
+ * is inside the box, so neighbours that merely touch a dense layout are not. Dragging a
+ * selected piece moves the whole selection. While moving, corners snap to corners of the
+ * other pieces and the selection's centre snaps to the sheet's centre lines (a guide line
+ * shows it); Alt disables snapping. The round handle of a single selected piece rotates
+ * it (15° steps, Shift for free angle).
+ *
+ * Keyboard: arrows move the selection 1 mm (Shift 10 mm), R / Shift+R rotate it by 60°
+ * as one block, Ctrl/Cmd+A selects all, Esc clears. The selection toolbar in the app
+ * offers the same without dragging.
  */
 @Component({
   selector: 'app-artboard',
@@ -30,6 +49,10 @@ export class Artboard {
   private readonly injector = inject(Injector);
   private readonly svg = viewChild.required<ElementRef<SVGSVGElement>>('svg');
   private drag: Drag | null = null;
+
+  protected readonly marquee = signal<Rect | null>(null);
+  /** Which sheet centre lines the dragged selection is snapped to. */
+  protected readonly guides = signal({ vertical: false, horizontal: false });
 
   protected readonly pieces = computed(() => this.store.source()?.pieces ?? []);
   protected readonly sheetLabel = computed(() => {
@@ -57,21 +80,35 @@ export class Artboard {
   }
 
   protected onBackgroundDown(e: PointerEvent): void {
-    if (e.target === this.svg().nativeElement || (e.target as Element).classList.contains('paper')) {
-      this.store.select(null);
-    }
+    if (e.button !== 0) return;
+    const target = e.target as Element;
+    if (target !== this.svg().nativeElement && !target.classList.contains('paper')) return;
+    e.preventDefault();
+    const base = e.shiftKey ? new Set(this.store.selection()) : new Set<number>();
+    this.store.select(base);
+    this.drag = { kind: 'marquee', start: this.toSheet(e), base, pointerId: e.pointerId };
+    this.svg().nativeElement.setPointerCapture(e.pointerId);
   }
 
   protected onPieceDown(e: PointerEvent, index: number): void {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    const placement = this.store.placementOf(index);
-    if (!placement) return;
-    const pt = this.toSheet(e);
-    this.store.select(index, true);
+    if (e.shiftKey) {
+      this.store.toggle(index);
+      return;
+    }
+    if (!this.store.selection().has(index)) this.store.select([index], true);
+    else this.store.select(this.store.selection(), true);
     this.focusPiece(index);
-    this.drag = { kind: 'move', index, offset: { x: pt.x - placement.x, y: pt.y - placement.y }, pointerId: e.pointerId };
+
+    const origins = new Map(
+      this.store
+        .placements()
+        .filter((p) => this.store.selection().has(p.index))
+        .map((p) => [p.index, { x: p.x, y: p.y }]),
+    );
+    this.drag = { kind: 'move', start: this.toSheet(e), origins, pointerId: e.pointerId };
     this.svg().nativeElement.setPointerCapture(e.pointerId);
   }
 
@@ -87,18 +124,34 @@ export class Artboard {
     const drag = this.drag;
     if (!drag || e.pointerId !== drag.pointerId) return;
     const pt = this.toSheet(e);
-    const placement = this.store.placementOf(drag.index);
-    if (!placement) return;
 
     if (drag.kind === 'move') {
-      let next = { ...placement, x: pt.x - drag.offset.x, y: pt.y - drag.offset.y };
-      if (!e.altKey) next = this.snapToNeighbours(next);
-      this.store.update(drag.index, { x: next.x, y: next.y });
-    } else {
+      let delta = { x: pt.x - drag.start.x, y: pt.y - drag.start.y };
+      if (e.altKey) this.guides.set({ vertical: false, horizontal: false });
+      else delta = this.snap(drag.origins, delta);
+      const positions = new Map([...drag.origins].map(([i, o]) => [i, { x: o.x + delta.x, y: o.y + delta.y }]));
+      this.store.setPositions(positions);
+    } else if (drag.kind === 'rotate') {
+      const placement = this.store.placementOf(drag.index);
+      if (!placement) return;
       // Handle sits straight "up" from the centroid, i.e. at -90° in screen angles.
       let angle = (Math.atan2(pt.y - placement.y, pt.x - placement.x) * 180) / Math.PI + 90;
       if (!e.shiftKey) angle = Math.round(angle / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG;
       this.store.update(drag.index, { rotation: angle });
+    } else {
+      const rect = {
+        x: Math.min(drag.start.x, pt.x),
+        y: Math.min(drag.start.y, pt.y),
+        width: Math.abs(pt.x - drag.start.x),
+        height: Math.abs(pt.y - drag.start.y),
+      };
+      if (Math.max(rect.width, rect.height) * this.pxPerUnit() < CLICK_PX) return;
+      this.marquee.set(rect);
+      const caught = this.store
+        .placements()
+        .filter((p) => p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height)
+        .map((p) => p.index);
+      this.store.select([...drag.base, ...caught]);
     }
   }
 
@@ -106,11 +159,15 @@ export class Artboard {
     if (this.drag?.pointerId !== e.pointerId) return;
     this.svg().nativeElement.releasePointerCapture(e.pointerId);
     this.drag = null;
+    this.marquee.set(null);
+    this.guides.set({ vertical: false, horizontal: false });
   }
 
-  protected onKey(e: KeyboardEvent, index: number): void {
-    const p = this.store.placementOf(index);
-    if (!p) return;
+  protected onPieceFocus(index: number): void {
+    if (!this.store.selection().has(index)) this.store.select([index]);
+  }
+
+  protected onKey(e: KeyboardEvent): void {
     const step = (e.shiftKey ? 10 : 1) * MM;
     const moves: Record<string, [number, number]> = {
       ArrowLeft: [-step, 0],
@@ -119,11 +176,13 @@ export class Artboard {
       ArrowDown: [0, step],
     };
     if (moves[e.key]) {
-      this.store.update(index, { x: p.x + moves[e.key][0], y: p.y + moves[e.key][1] });
+      this.store.moveSelection(...moves[e.key]);
     } else if (e.key === 'r' || e.key === 'R') {
-      this.store.update(index, { rotation: p.rotation + (e.shiftKey ? -ROTATE_STEP : ROTATE_STEP) });
+      this.store.rotateSelection(e.shiftKey ? -ROTATE_STEP : ROTATE_STEP);
+    } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
+      this.store.selectAll();
     } else if (e.key === 'Escape') {
-      this.store.select(null);
+      this.store.clearSelection();
       (e.target as SVGElement).blur();
     } else {
       return;
@@ -131,15 +190,25 @@ export class Artboard {
     e.preventDefault();
   }
 
-  /** Moves the piece so its nearest corner lands exactly on a neighbour's corner, if close enough. */
-  private snapToNeighbours(next: Placement): Placement {
+  /**
+   * Adjusts a group drag offset. Corner-to-corner snapping wins (it is what makes cut
+   * edges line up); otherwise the centre of the group's bounding box snaps to the sheet's
+   * vertical and/or horizontal centre line, each axis on its own.
+   */
+  private snap(origins: ReadonlyMap<number, Point>, delta: Point): Point {
     const pieces = this.pieces();
-    const own = placedTriangle(pieces[next.index], next);
-    const threshold = SNAP_PX / (this.svg().nativeElement.getScreenCTM()?.a || 1);
-    let best: { d: number; dx: number; dy: number } | null = null;
+    const threshold = SNAP_PX / this.pxPerUnit();
+    const moving = this.store.placements().filter((p) => origins.has(p.index));
+    const corners = (d: Point) =>
+      moving.flatMap((p) => {
+        const o = origins.get(p.index)!;
+        return placedTriangle(pieces[p.index], { ...p, x: o.x + d.x, y: o.y + d.y });
+      });
 
+    const own = corners(delta);
+    let best: { d: number; dx: number; dy: number } | null = null;
     for (const other of this.store.placements()) {
-      if (other.index === next.index) continue;
+      if (origins.has(other.index)) continue;
       for (const target of placedTriangle(pieces[other.index], other)) {
         for (const corner of own) {
           const d = distance(corner, target);
@@ -147,7 +216,30 @@ export class Artboard {
         }
       }
     }
-    return best ? { ...next, x: next.x + best.dx, y: next.y + best.dy } : next;
+
+    const next = best ? { x: delta.x + best.dx, y: delta.y + best.dy } : { ...delta };
+    const pts = best ? corners(next) : own;
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    const { width, height } = this.store.sheet();
+    const offX = width / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
+    const offY = height / 2 - (Math.min(...ys) + Math.max(...ys)) / 2;
+
+    // After a corner snap only report coincidental alignment; never pull the group off the corner.
+    const tolerance = best ? 0.01 : threshold;
+    const vertical = Math.abs(offX) < tolerance;
+    const horizontal = Math.abs(offY) < tolerance;
+    if (!best) {
+      if (vertical) next.x += offX;
+      if (horizontal) next.y += offY;
+    }
+    this.guides.set({ vertical, horizontal });
+    return next;
+  }
+
+  /** Screen pixels per sheet unit at the current zoom. */
+  private pxPerUnit(): number {
+    return this.svg().nativeElement.getScreenCTM()?.a || 1;
   }
 
   private toSheet(e: PointerEvent): Point {
