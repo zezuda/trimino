@@ -1,0 +1,157 @@
+<header class="top">
+  <h1>Trimino</h1>
+  @if (store.source(); as src) {
+    <span class="file">{{ src.fileName }}</span>
+  }
+</header>
+
+<main>
+  <section class="controls" aria-label="Ovládání">
+    <div class="group">
+      <label class="btn primary" [class.disabled]="busy()">
+        Nahrát PDF
+        <input
+          #pdfInput
+          type="file"
+          accept="application/pdf,.pdf"
+          class="visually-hidden"
+          [disabled]="busy()"
+          (change)="onPdf(pdfInput)"
+        />
+      </label>
+      <button type="button" class="btn" [disabled]="!store.source() || busy()" (click)="downloadSheet('pdf')">
+        Stáhnout PDF
+      </button>
+      <button type="button" class="btn" [disabled]="!store.source() || busy()" (click)="downloadSheet('jpg')">
+        Stáhnout JPG
+      </button>
+    </div>
+
+    <div class="group">
+      <label for="template">Šablona</label>
+      <select id="template" [value]="templates.activeId() ?? ''" (change)="onTemplateChange(templateSelect.value)" #templateSelect>
+        <option value="">— žádná —</option>
+        @for (t of templates.templates(); track t.id) {
+          <option [value]="t.id" [selected]="t.id === templates.activeId()">{{ t.name }}</option>
+        }
+      </select>
+      <button type="button" class="btn" [disabled]="!store.source()" (click)="startSave()">Uložit</button>
+      <button type="button" class="btn" [disabled]="!templates.activeId()" (click)="exportTemplate()">Export</button>
+      <label class="btn">
+        Import
+        <input #jsonInput type="file" accept="application/json,.json" class="visually-hidden" (change)="importTemplate(jsonInput)" />
+      </label>
+      <button type="button" class="btn danger" [disabled]="!templates.activeId()" (click)="deleteTemplate()">Smazat</button>
+    </div>
+
+    <div class="group">
+      <label for="paper">Arch</label>
+      <select id="paper" #paper (change)="store.setPreset($any(paper.value))">
+        @for (p of presets; track p.value) {
+          <option [value]="p.value" [selected]="store.preset() === p.value">{{ p.label }}</option>
+        }
+      </select>
+      @if (store.preset() === 'custom') {
+        <label class="size">
+          <span class="visually-hidden">Šířka v mm</span>
+          <input
+            #w
+            type="number"
+            inputmode="decimal"
+            [min]="CUSTOM_MM.min"
+            [max]="CUSTOM_MM.max"
+            [value]="sheetMm().width"
+            (change)="setCustomSize(w.value, h.value)"
+          />
+        </label>
+        <span aria-hidden="true">×</span>
+        <label class="size">
+          <span class="visually-hidden">Výška v mm</span>
+          <input
+            #h
+            type="number"
+            inputmode="decimal"
+            [min]="CUSTOM_MM.min"
+            [max]="CUSTOM_MM.max"
+            [value]="sheetMm().height"
+            (change)="setCustomSize(w.value, h.value)"
+          />
+          mm
+        </label>
+      }
+    </div>
+
+    <fieldset class="group">
+      <legend class="visually-hidden">Orientace</legend>
+      @for (o of [{ v: 'portrait', l: 'Na výšku' }, { v: 'landscape', l: 'Na šířku' }]; track o.v) {
+        <label class="radio">
+          <input
+            type="radio"
+            name="orientation"
+            [value]="o.v"
+            [checked]="store.orientation() === o.v"
+            (change)="setOrientation($any(o.v))"
+          />
+          {{ o.l }}
+        </label>
+      }
+      <button type="button" class="btn" [disabled]="!store.source()" (click)="store.resetLayout()">Původní rozložení</button>
+    </fieldset>
+  </section>
+
+  @if (saving()) {
+    <form class="save" (submit)="saveTemplate($event)">
+      <label for="template-name">Název šablony</label>
+      <input
+        id="template-name"
+        type="text"
+        maxlength="80"
+        required
+        autocomplete="off"
+        [value]="templateName()"
+        (input)="templateName.set(nameInput.value)"
+        #nameInput
+      />
+      <button type="submit" class="btn primary">Uložit</button>
+      <button type="button" class="btn" (click)="saving.set(false)">Zrušit</button>
+    </form>
+  }
+
+  <div class="messages" aria-live="polite">
+    @if (busy()) {
+      <p>Zpracovávám…</p>
+    } @else if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    } @else if (status()) {
+      <p>
+        {{ status() }}
+        @if (store.overflowing().size) {
+          · <span class="warn">{{ store.overflowing().size }} mimo arch</span>
+        }
+      </p>
+    }
+  </div>
+
+  @if (store.source()) {
+    <div class="selection" aria-label="Vybraný dílek" role="toolbar">
+      @if (selectedPlacement(); as p) {
+        <strong>Dílek {{ p.index + 1 }}</strong>
+        <button type="button" class="btn icon" (click)="rotateSelected(-ROTATE_STEP)" [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doleva'">⟲</button>
+        <button type="button" class="btn icon" (click)="rotateSelected(ROTATE_STEP)" [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doprava'">⟳</button>
+        <label class="angle">
+          <span class="visually-hidden">Otočení ve stupních</span>
+          <input #angle type="number" step="15" [value]="p.rotation" (change)="setRotation(angle.value)" />°
+        </label>
+        <span class="nudge">
+          <button type="button" class="btn icon" (click)="nudge(-1, 0)" [attr.aria-label]="'Posunout doleva o ' + NUDGE_MM + ' mm'">←</button>
+          <button type="button" class="btn icon" (click)="nudge(0, -1)" [attr.aria-label]="'Posunout nahoru o ' + NUDGE_MM + ' mm'">↑</button>
+          <button type="button" class="btn icon" (click)="nudge(0, 1)" [attr.aria-label]="'Posunout dolů o ' + NUDGE_MM + ' mm'">↓</button>
+          <button type="button" class="btn icon" (click)="nudge(1, 0)" [attr.aria-label]="'Posunout doprava o ' + NUDGE_MM + ' mm'">→</button>
+        </span>
+      } @else {
+        <span class="hint">Vyberte dílek</span>
+      }
+    </div>
+    <app-artboard />
+  }
+</main>

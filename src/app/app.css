@@ -1,0 +1,99 @@
+:host {
+  display: block;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px 32px;
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 16px 0 8px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.file {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.messages {
+  min-height: 1.5em;
+  margin: 12px 0 4px;
+}
+
+.messages p {
+  margin: 0;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.warn {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: 8px;
+}
+
+.nudge {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.size input {
+  width: 5.5em;
+}
+
+.angle input {
+  width: 5em;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}

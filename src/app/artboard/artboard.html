@@ -1,0 +1,57 @@
+<svg
+  #svg
+  class="sheet"
+  [attr.viewBox]="viewBox()"
+  role="group"
+  [attr.aria-label]="sheetLabel()"
+  aria-describedby="artboard-help"
+  (pointerdown)="onBackgroundDown($event)"
+  (pointermove)="onPointerMove($event)"
+  (pointerup)="onPointerUp($event)"
+  (pointercancel)="onPointerUp($event)"
+>
+  <rect class="paper" [attr.width]="store.sheet().width" [attr.height]="store.sheet().height" />
+
+  @for (p of store.placements(); track p.index) {
+    @let piece = pieces()[p.index];
+    @let isSelected = store.selected() === p.index;
+    <g
+      class="piece"
+      [class.selected]="isSelected"
+      [class.overflow]="store.overflowing().has(p.index)"
+      [attr.transform]="transform(p)"
+      [attr.data-index]="p.index"
+      tabindex="0"
+      role="button"
+      [attr.aria-label]="label(p)"
+      [attr.aria-pressed]="isSelected"
+      (pointerdown)="onPieceDown($event, p.index)"
+      (focus)="store.select(p.index)"
+      (keydown)="onKey($event, p.index)"
+    >
+      <image
+        [attr.href]="piece.imageUrl"
+        [attr.x]="piece.imageBox.x"
+        [attr.y]="piece.imageBox.y"
+        [attr.width]="piece.imageBox.width"
+        [attr.height]="piece.imageBox.height"
+        preserveAspectRatio="none"
+      />
+      <polygon class="outline" [attr.points]="localPoints(piece)" />
+      <text class="badge" aria-hidden="true" y="4">{{ p.index + 1 }}</text>
+      @if (isSelected) {
+        <line class="handle-arm" x1="0" y1="0" x2="0" [attr.y2]="-handleOffset(piece)" />
+        <circle
+          class="handle"
+          r="7"
+          cx="0"
+          [attr.cy]="-handleOffset(piece)"
+          (pointerdown)="onHandleDown($event, p.index)"
+        >
+          <title>Otočit</title>
+        </circle>
+      }
+    </g>
+  }
+</svg>
+<p id="artboard-help" class="visually-hidden">Šipky posun, R otočení o 60°.</p>

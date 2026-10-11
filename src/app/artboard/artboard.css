@@ -1,0 +1,82 @@
+:host {
+  display: block;
+}
+
+.sheet {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 85vh;
+  touch-action: none;
+  user-select: none;
+  overflow: visible;
+}
+
+.paper {
+  fill: #fff;
+  stroke: var(--border);
+  stroke-width: 1;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.15));
+}
+
+.piece {
+  cursor: grab;
+  outline: none;
+}
+
+.piece:active {
+  cursor: grabbing;
+}
+
+/* Hit-testing comes from the triangle, not the image's transparent rectangle corners. */
+.piece image {
+  pointer-events: none;
+}
+
+.outline {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.piece:hover .outline {
+  stroke: var(--accent-soft);
+}
+
+.piece.selected .outline,
+.piece:focus-visible .outline {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.piece.overflow .outline {
+  stroke: var(--danger);
+  stroke-dasharray: 6 4;
+}
+
+/* Index badge so pieces can be told apart and matched with the template. */
+.badge {
+  font: 600 12px system-ui, sans-serif;
+  text-anchor: middle;
+  fill: var(--accent);
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
+.handle-arm {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  cursor: grab;
+}

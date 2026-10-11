@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "id": "mozek-midi-9d",
+  "name": "Trimino 9 \u2013 velk\u00fd troj\u00faheln\u00edk",
+  "orientation": "landscape",
+  "pieceCount": 9,
+  "createdAt": "2026-10-11T20:30:00.000Z",
+  "placements": [
+    {
+      "index": 6,
+      "x": 420.94,
+      "y": 133.98,
+      "rotation": 120
+    },
+    {
+      "index": 4,
+      "x": 307.56,
+      "y": 330.37,
+      "rotation": 120
+    },
+    {
+      "index": 3,
+      "x": 420.94,
+      "y": 264.91,
+      "rotation": 120
+    },
+    {
+      "index": 0,
+      "x": 534.33,
+      "y": 330.37,
+      "rotation": 120
+    },
+    {
+      "index": 8,
+      "x": 194.17,
+      "y": 526.76,
+      "rotation": 120
+    },
+    {
+      "index": 5,
+      "x": 307.56,
+      "y": 461.3,
+      "rotation": 120
+    },
+    {
+      "index": 2,
+      "x": 420.94,
+      "y": 526.76,
+      "rotation": 120
+    },
+    {
+      "index": 1,
+      "x": 534.33,
+      "y": 461.3,
+      "rotation": 120
+    },
+    {
+      "index": 7,
+      "x": 647.72,
+      "y": 526.76,
+      "rotation": -60
+    }
+  ]
+}
