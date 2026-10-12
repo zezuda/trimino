@@ -27,6 +27,8 @@ npm run build      # static files in dist/trimino/browser
    - **drag the round handle** (single piece only) to rotate it in 15° steps (hold **Shift** for any angle);
    - **keyboard** – Tab to a piece, arrows move the selection 1 mm (**Shift** = 10 mm), **R** / **Shift+R**
      rotates it by ±60° as one block (an assembled group stays assembled), **Esc** deselects;
+   - **Ctrl/Cmd+Z** undoes the last change (moves, rotations, sheet size, template, reset),
+     **Ctrl/Cmd+Shift+Z** or **Ctrl+Y** redoes it. Held arrow keys count as one step;
    - the bar above the sheet does the same with buttons (±60°, exact angle for a single piece, 5 mm nudges).
    Pieces reaching outside the sheet get a red dashed outline and are counted as "mimo arch".
 3. **Arch** – paper size: A5, A4, A3, Letter or **Vlastní** (custom width × height in mm, 50–1500 mm).
@@ -64,6 +66,9 @@ draws one closed path per triangle, separate lines, or one long line per grid ro
 respected, so a PDF downloaded from this app can be loaded again.
 
 Limits: scanned (raster-only) PDFs have no vector lines and are not supported; at most 20 pages / 50 MB.
+With a multi-page PDF the first page starts centred on the sheet and every further page is laid out to
+the right of it, outside the sheet (flagged as overflowing); drag the pieces you need onto the sheet.
+Only what lies on the sheet is exported.
 
 ## Code map
 

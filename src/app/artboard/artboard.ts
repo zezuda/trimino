@@ -1,4 +1,4 @@
-import { Component, ElementRef, afterNextRender, computed, inject, signal, viewChild, Injector } from '@angular/core';
+import { Component, ElementRef, afterNextRender, computed, inject, linkedSignal, signal, viewChild, Injector } from '@angular/core';
 import { Point, distance } from '../core/geometry';
 import { LayoutStore } from '../core/layout.store';
 import { MM, Piece, Placement } from '../core/models';
@@ -9,6 +9,8 @@ const SNAP_PX = 12;
 const ROTATE_SNAP_DEG = 15;
 /** Below this many screen pixels a background drag counts as a click. */
 const CLICK_PX = 3;
+/** Margin kept around pieces lying outside the sheet, in points. */
+const VIEW_MARGIN = 10 * MM;
 /** Keyboard / button rotation step: 60° keeps equilateral pieces on the same grid. */
 export const ROTATE_STEP = 60;
 
@@ -36,7 +38,8 @@ interface Rect {
  * it (15° steps, Shift for free angle).
  *
  * Keyboard: arrows move the selection 1 mm (Shift 10 mm), R / Shift+R rotate it by 60°
- * as one block, Ctrl/Cmd+A selects all, Esc clears. The selection toolbar in the app
+ * as one block, Ctrl/Cmd+A selects all, Esc clears. Undo/redo (Ctrl/Cmd+Z, Ctrl+Y) is
+ * handled app-wide in App. The selection toolbar in the app
  * offers the same without dragging.
  */
 @Component({
@@ -59,7 +62,38 @@ export class Artboard {
     const { width, height } = this.store.sheet();
     return `Arch ${Math.round(width / MM)} × ${Math.round(height / MM)} mm`;
   });
-  protected readonly viewBox = computed(() => `0 0 ${this.store.sheet().width} ${this.store.sheet().height}`);
+  /** True while a pointer drag runs; the view is not refitted then, so the zoom stays put. */
+  private readonly dragging = signal(false);
+  /**
+   * The sheet plus every piece lying outside it (e.g. the further pages of a multi-page
+   * PDF, which start beside the sheet), so all pieces stay visible and reachable.
+   */
+  protected readonly viewBox = linkedSignal({
+    source: () => ({
+      dragging: this.dragging(),
+      sheet: this.store.sheet(),
+      pieces: this.pieces(),
+      placements: this.store.placements(),
+    }),
+    computation: ({ dragging, sheet, pieces, placements }, previous?: { value: string }) => {
+      if (dragging && previous) return previous.value;
+      const { width, height } = sheet;
+      let [minX, minY, maxX, maxY] = [0, 0, width, height];
+      for (const p of placements) {
+        for (const v of placedTriangle(pieces[p.index], p)) {
+          minX = Math.min(minX, v.x - VIEW_MARGIN);
+          minY = Math.min(minY, v.y - VIEW_MARGIN);
+          maxX = Math.max(maxX, v.x + VIEW_MARGIN);
+          maxY = Math.max(maxY, v.y + VIEW_MARGIN);
+        }
+      }
+      if (minX > -VIEW_MARGIN) minX = 0;
+      if (minY > -VIEW_MARGIN) minY = 0;
+      if (maxX < width + VIEW_MARGIN) maxX = width;
+      if (maxY < height + VIEW_MARGIN) maxY = height;
+      return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+    },
+  });
 
   protected transform(p: Placement): string {
     return `translate(${p.x} ${p.y}) rotate(${p.rotation})`;
@@ -88,6 +122,7 @@ export class Artboard {
     this.store.select(base);
     this.drag = { kind: 'marquee', start: this.toSheet(e), base, pointerId: e.pointerId };
     this.svg().nativeElement.setPointerCapture(e.pointerId);
+    this.dragging.set(true);
   }
 
   protected onPieceDown(e: PointerEvent, index: number): void {
@@ -108,16 +143,20 @@ export class Artboard {
         .filter((p) => this.store.selection().has(p.index))
         .map((p) => [p.index, { x: p.x, y: p.y }]),
     );
+    this.store.checkpoint();
     this.drag = { kind: 'move', start: this.toSheet(e), origins, pointerId: e.pointerId };
     this.svg().nativeElement.setPointerCapture(e.pointerId);
+    this.dragging.set(true);
   }
 
   protected onHandleDown(e: PointerEvent, index: number): void {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    this.store.checkpoint();
     this.drag = { kind: 'rotate', index, pointerId: e.pointerId };
     this.svg().nativeElement.setPointerCapture(e.pointerId);
+    this.dragging.set(true);
   }
 
   protected onPointerMove(e: PointerEvent): void {
@@ -159,6 +198,7 @@ export class Artboard {
     if (this.drag?.pointerId !== e.pointerId) return;
     this.svg().nativeElement.releasePointerCapture(e.pointerId);
     this.drag = null;
+    this.dragging.set(false);
     this.marquee.set(null);
     this.guides.set({ vertical: false, horizontal: false });
   }

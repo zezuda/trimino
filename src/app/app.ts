@@ -14,6 +14,7 @@ const NUDGE_MM = 5;
   imports: [Artboard],
   templateUrl: './app.html',
   styleUrl: './app.css',
+  host: { '(document:keydown)': 'onShortcut($event)' },
 })
 export class App {
   protected readonly store = inject(LayoutStore);
@@ -51,6 +52,21 @@ export class App {
     const i = this.store.single();
     return i === null ? undefined : this.store.placements().find((p) => p.index === i);
   });
+  /**
+   * Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes, anywhere on the page except
+   * inside text fields, which keep their own undo.
+   */
+  protected onShortcut(e: KeyboardEvent): void {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable]')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'z') e.shiftKey ? this.store.redo() : this.store.undo();
+    else if (key === 'y' && !e.shiftKey) this.store.redo();
+    else return;
+    e.preventDefault();
+  }
+
   protected async onPdf(input: HTMLInputElement): Promise<void> {
     const file = input.files?.[0];
     input.value = '';
@@ -145,7 +161,10 @@ export class App {
   protected setRotation(value: string): void {
     const p = this.selectedPlacement();
     const deg = Number(value);
-    if (p && value !== '' && Number.isFinite(deg)) this.store.update(p.index, { rotation: deg });
+    if (p && value !== '' && Number.isFinite(deg)) {
+      this.store.checkpoint('angle');
+      this.store.update(p.index, { rotation: deg });
+    }
   }
 
   protected nudge(dx: number, dy: number): void {
