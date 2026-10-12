@@ -11,7 +11,8 @@ import {
   SourceDocument,
   presetSize,
 } from './models';
-import { normaliseAngle, placedTriangle } from './placement';
+import { PieceKindId } from './piece-kind';
+import { normaliseAngle, placedShape } from './placement';
 
 /** Space between the sheet and the pages laid out beside it, in points. */
 const PAGE_GAP = 10 * MM;
@@ -28,8 +29,8 @@ interface Snapshot {
   readonly customSize: SheetSize;
 }
 
-/** Current document, piece placements on the sheet and selection. */
-@Injectable({ providedIn: 'root' })
+/** Current document, piece placements on the sheet and selection; one per module (see app.routes.ts). */
+@Injectable()
 export class LayoutStore {
   readonly source = signal<SourceDocument | null>(null);
   readonly orientation = signal<Orientation>('portrait');
@@ -58,7 +59,7 @@ export class LayoutStore {
     return new Set(
       this.placements()
         .filter((p) =>
-          placedTriangle(src.pieces[p.index], p).some((v) => v.x < -0.5 || v.y < -0.5 || v.x > width + 0.5 || v.y > height + 0.5),
+          placedShape(src.pieces[p.index], p).some((v) => v.x < -0.5 || v.y < -0.5 || v.x > width + 0.5 || v.y > height + 0.5),
         )
         .map((p) => p.index),
     );
@@ -173,10 +174,11 @@ export class LayoutStore {
     return fromTemplate.length;
   }
 
-  toTemplate(name: string, id: string = crypto.randomUUID()): LayoutTemplate {
+  toTemplate(kind: PieceKindId, name: string, id: string = crypto.randomUUID()): LayoutTemplate {
     return {
       version: 1,
       id,
+      kind,
       name,
       orientation: this.orientation(),
       sheet: { preset: this.preset(), ...this.sheet() },

@@ -1,4 +1,5 @@
-import { Matrix, Point, Triangle } from './geometry';
+import { Matrix, Point, Polygon } from './geometry';
+import type { PieceKindId } from './piece-kind';
 
 /**
  * Coordinate spaces used across the app (all in PDF points, 1 pt = 1/72 in):
@@ -7,14 +8,14 @@ import { Matrix, Point, Triangle } from './geometry';
  *  - sheet space: the output sheet (y down); placements live here.
  */
 
-/** One detected triangle cut out of the source PDF. */
+/** One detected piece (a triangle or a rectangle) cut out of the source PDF. */
 export interface Piece {
   /** Stable index in reading order of the source — the key templates are stored by. */
   readonly index: number;
   /** 0-based page of the source PDF. */
   readonly page: number;
-  readonly userTri: Triangle;
-  readonly viewTri: Triangle;
+  readonly userShape: Polygon;
+  readonly viewShape: Polygon;
   /** Centroid in view space; placements position this point. */
   readonly centroid: Point;
   /** Raster crop for the artboard (object URL) and its box relative to the centroid. */
@@ -84,6 +85,8 @@ export function presetSize(preset: Exclude<PaperPreset, 'custom'>, o: Orientatio
 export interface LayoutTemplate {
   readonly version: 1;
   readonly id: string;
+  /** Module the template belongs to; missing in templates saved before Domino existed, which means Trimino. */
+  readonly kind?: PieceKindId;
   readonly name: string;
   readonly orientation: Orientation;
   /** Paper; missing in templates saved before sizes existed, which means A4. */

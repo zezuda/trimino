@@ -7,7 +7,7 @@ import { CLIP_BLEED } from './pdf-source.service';
 
 /**
  * Builds the sheet as a vector PDF: every source page is embedded once as a form
- * XObject and each piece draws it through a triangular clip, moved and rotated into
+ * XObject and each piece draws it through a clip of its outline, moved and rotated into
  * place. Text and lines stay crisp for printing, unlike the raster previews.
  */
 @Injectable({ providedIn: 'root' })
@@ -54,14 +54,13 @@ export class PdfExportService {
       if (!piece) continue;
       const page = source.pages[piece.page];
       const m = multiply(flip, multiply(placementMatrix(placement, piece.centroid), page.viewTransform));
-      const [a, b, c] = inflate(piece.userTri, CLIP_BLEED);
+      const [first, ...rest] = inflate(piece.userShape, CLIP_BLEED);
 
       sheet.pushOperators(
         pushGraphicsState(),
         concatTransformationMatrix(...m),
-        moveTo(a.x, a.y),
-        lineTo(b.x, b.y),
-        lineTo(c.x, c.y),
+        moveTo(first.x, first.y),
+        ...rest.map((v) => lineTo(v.x, v.y)),
         closePath(),
         clip(),
         endPath(),

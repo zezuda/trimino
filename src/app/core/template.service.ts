@@ -1,20 +1,21 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { CUSTOM_MM, LayoutTemplate, MM, PAPER_PRESETS, Placement, SheetSpec } from './models';
+import { PIECE_KIND, PIECE_KINDS } from './piece-kind';
 
-const STORAGE_KEY = 'trimino.templates.v1';
-const ACTIVE_KEY = 'trimino.activeTemplate';
 const MAX_PIECES = 500;
 
 /**
- * Templates live in the browser's localStorage; export/import as JSON moves them
- * between browsers or computers. Imported files are untrusted and validated field by
- * field — nothing from them is ever rendered as HTML.
+ * Templates live in the browser's localStorage, separately for each module (see
+ * app.routes.ts); export/import as JSON moves them between browsers or computers.
+ * Imported files are untrusted and validated field by field — nothing from them is
+ * ever rendered as HTML.
  */
-@Injectable({ providedIn: 'root' })
+@Injectable()
 export class TemplateService {
-  readonly templates = signal<readonly LayoutTemplate[]>(readStored());
+  private readonly kind = inject(PIECE_KIND);
+  readonly templates = signal<readonly LayoutTemplate[]>(this.readStored());
   /** Template applied automatically to every newly loaded PDF. */
-  readonly activeId = signal<string | null>(readActive());
+  readonly activeId = signal<string | null>(this.readActive());
 
   save(template: LayoutTemplate): void {
     this.templates.update((list) => [...list.filter((t) => t.id !== template.id), template]);
@@ -30,8 +31,8 @@ export class TemplateService {
   setActive(id: string | null): void {
     this.activeId.set(id);
     try {
-      if (id) localStorage.setItem(ACTIVE_KEY, id);
-      else localStorage.removeItem(ACTIVE_KEY);
+      if (id) localStorage.setItem(this.kind.activeKey, id);
+      else localStorage.removeItem(this.kind.activeKey);
     } catch {
       /* storage unavailable (private mode) — selection just won't survive reload */
     }
@@ -41,38 +42,45 @@ export class TemplateService {
     return this.templates().find((t) => t.id === this.activeId()) ?? null;
   }
 
-  /** Parses an imported file; returns null if it is not a valid template. */
-  parse(json: string): LayoutTemplate | null {
+  /** Parses an imported file; returns an error message if it is not a valid template of this module. */
+  parse(json: string): LayoutTemplate | string {
+    let t: LayoutTemplate | null;
     try {
-      return validate(JSON.parse(json));
+      t = validate(JSON.parse(json));
     } catch {
-      return null;
+      t = null;
     }
+    if (!t) return 'Neplatný soubor šablony.';
+    if ((t.kind ?? 'trimino') !== this.kind.id) {
+      const other = PIECE_KINDS.find((k) => k.id === (t.kind ?? 'trimino'));
+      return `Šablona je pro ${other?.title}, ne pro ${this.kind.title}.`;
+    }
+    return t;
   }
 
   private persist(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.templates()));
+      localStorage.setItem(this.kind.storageKey, JSON.stringify(this.templates()));
     } catch {
       /* quota or private mode — templates remain for this session */
     }
   }
-}
 
-function readStored(): LayoutTemplate[] {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
-    return Array.isArray(raw) ? raw.map(validate).filter((t): t is LayoutTemplate => t !== null) : [];
-  } catch {
-    return [];
+  private readStored(): LayoutTemplate[] {
+    try {
+      const raw: unknown = JSON.parse(localStorage.getItem(this.kind.storageKey) ?? '[]');
+      return Array.isArray(raw) ? raw.map(validate).filter((t): t is LayoutTemplate => t !== null) : [];
+    } catch {
+      return [];
+    }
   }
-}
 
-function readActive(): string | null {
-  try {
-    return localStorage.getItem(ACTIVE_KEY);
-  } catch {
-    return null;
+  private readActive(): string | null {
+    try {
+      return localStorage.getItem(this.kind.activeKey);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -99,10 +107,14 @@ function validate(v: unknown): LayoutTemplate | null {
   const sheet = validateSheet(o['sheet']);
   if (sheet === null) return null;
 
+  const kind = PIECE_KINDS.find((k) => k.id === o['kind'])?.id;
+  if (o['kind'] !== undefined && !kind) return null;
+
   const name = typeof o['name'] === 'string' && o['name'].trim() ? o['name'].trim().slice(0, 80) : 'Šablona';
   return {
     version: 1,
     id: typeof o['id'] === 'string' && /^[\w-]{1,64}$/.test(o['id']) ? o['id'] : crypto.randomUUID(),
+    ...(kind && { kind }),
     name,
     orientation: o['orientation'],
     ...(sheet && { sheet }),

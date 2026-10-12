@@ -1,5 +1,10 @@
 <header class="top">
-  <h1>Trimino</h1>
+  <h1 class="visually-hidden">{{ kind.title }}</h1>
+  <nav class="modules" aria-label="Druh dílků">
+    @for (k of kinds; track k.id) {
+      <a [routerLink]="'/' + k.id" routerLinkActive="active" ariaCurrentWhenActive="page">{{ k.title }}</a>
+    }
+  </nav>
   @if (store.source(); as src) {
     <span class="file">{{ src.fileName }}</span>
   }

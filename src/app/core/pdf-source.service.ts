@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
-import { Matrix, Triangle, apply, centroid, inflate } from './geometry';
+import { Matrix, Polygon, apply, centroid, inflate } from './geometry';
 import { Piece, SourceDocument, SourcePage } from './models';
-import { detectTriangles, extractStrokedSegments, sortReadingOrder } from './triangle-detector';
+import { PieceKind } from './piece-kind';
+import { extractStrokedSegments, sortReadingOrder } from './vector-lines';
 
 /** Raster scale for the artboard previews (3 ≈ 216 dpi; the export stays vector). */
 const RENDER_SCALE = 3;
@@ -25,11 +26,11 @@ export async function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
 
 /**
  * Loads a PDF entirely in the browser (nothing is uploaded anywhere), detects the
- * triangles on every page and cuts a preview image for each of them.
+ * pieces of the given kind on every page and cuts a preview image for each of them.
  */
 @Injectable({ providedIn: 'root' })
 export class PdfSourceService {
-  async load(file: File): Promise<SourceDocument> {
+  async load(file: File, kind: PieceKind): Promise<SourceDocument> {
     if (file.size > MAX_BYTES) throw new PdfLoadError('Soubor je příliš velký (max. 50 MB).');
     const bytes = new Uint8Array(await file.arrayBuffer());
     const { OPS, getDocument } = await loadPdfJs();
@@ -53,14 +54,14 @@ export class PdfSourceService {
         pages.push({ width: viewport.width, height: viewport.height, viewTransform });
 
         const segments = extractStrokedSegments(await page.getOperatorList(), OPS);
-        const found = detectTriangles(segments).map((userTri) => ({
-          userTri,
-          viewTri: userTri.map((pt) => apply(viewTransform, pt)) as unknown as Triangle,
+        const found = kind.detect(segments).map((userShape) => ({
+          userShape,
+          viewShape: userShape.map((pt) => apply(viewTransform, pt)),
         }));
         if (found.length === 0) continue;
 
-        const ordered = sortReadingOrder(found.map((f) => f.viewTri));
-        const byView = new Map(found.map((f) => [f.viewTri, f.userTri]));
+        const ordered = sortReadingOrder(found.map((f) => f.viewShape));
+        const byView = new Map(found.map((f) => [f.viewShape, f.userShape]));
 
         const canvas = document.createElement('canvas');
         const scaled = page.getViewport({ scale: RENDER_SCALE });
@@ -68,14 +69,14 @@ export class PdfSourceService {
         canvas.height = Math.ceil(scaled.height);
         await page.render({ canvas, viewport: scaled }).promise;
 
-        for (const viewTri of ordered) {
-          pieces.push(await cutPiece(canvas, pieces.length, p - 1, viewTri, byView.get(viewTri)!));
+        for (const viewShape of ordered) {
+          pieces.push(await cutPiece(canvas, pieces.length, p - 1, viewShape, byView.get(viewShape)!));
         }
         canvas.width = canvas.height = 0; // release the bitmap early
       }
 
       if (pieces.length === 0) {
-        throw new PdfLoadError('V PDF nebyly nalezeny žádné trojúhelníky.');
+        throw new PdfLoadError(kind.notFound);
       }
       return { fileName: file.name, bytes, pages, pieces };
     } finally {
@@ -93,10 +94,10 @@ async function cutPiece(
   pageCanvas: HTMLCanvasElement,
   index: number,
   page: number,
-  viewTri: Triangle,
-  userTri: Triangle,
+  viewShape: Polygon,
+  userShape: Polygon,
 ): Promise<Piece> {
-  const clip = inflate(viewTri, CLIP_BLEED);
+  const clip = inflate(viewShape, CLIP_BLEED);
   const xs = clip.map((p) => p.x);
   const ys = clip.map((p) => p.y);
   const box = {
@@ -113,9 +114,7 @@ async function cutPiece(
   ctx.scale(RENDER_SCALE, RENDER_SCALE);
   ctx.translate(-box.x, -box.y);
   ctx.beginPath();
-  ctx.moveTo(clip[0].x, clip[0].y);
-  ctx.lineTo(clip[1].x, clip[1].y);
-  ctx.lineTo(clip[2].x, clip[2].y);
+  for (const v of clip) ctx.lineTo(v.x, v.y);
   ctx.closePath();
   ctx.clip();
   ctx.drawImage(pageCanvas, 0, 0, pageCanvas.width / RENDER_SCALE, pageCanvas.height / RENDER_SCALE);
@@ -123,12 +122,12 @@ async function cutPiece(
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png'),
   );
-  const c = centroid(viewTri);
+  const c = centroid(viewShape);
   return {
     index,
     page,
-    userTri,
-    viewTri,
+    userShape,
+    viewShape,
     centroid: c,
     imageUrl: URL.createObjectURL(blob),
     imageBox: { x: box.x - c.x, y: box.y - c.y, width: box.width, height: box.height },

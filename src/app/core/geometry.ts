@@ -14,6 +14,9 @@ export interface Point {
 
 export type Triangle = readonly [Point, Point, Point];
 
+/** Convex outline of a piece (a triangle or a rectangle), vertices in drawing order. */
+export type Polygon = readonly Point[];
+
 export const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
 
 /** Returns `m1 · m2` — applying the result equals applying `m2` first, then `m1`. */
@@ -56,23 +59,34 @@ export function rotate(deg: number): Matrix {
 
 export const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
-export function centroid(t: Triangle): Point {
-  return { x: (t[0].x + t[1].x + t[2].x) / 3, y: (t[0].y + t[1].y + t[2].y) / 3 };
+/** Vertex mean — the centroid for triangles and parallelograms, the only shapes pieces have. */
+export function centroid(poly: Polygon): Point {
+  return { x: poly.reduce((a, p) => a + p.x, 0) / poly.length, y: poly.reduce((a, p) => a + p.y, 0) / poly.length };
 }
 
-export function area(t: Triangle): number {
-  return Math.abs((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[2].x - t[0].x) * (t[1].y - t[0].y)) / 2;
+export function area(poly: Polygon): number {
+  return Math.abs(signedArea(poly));
 }
 
-/** Strict point-in-triangle test (points on an edge, within `eps`, count as outside). */
-export function containsStrictly(t: Triangle, p: Point, eps = 0.5): boolean {
-  const a = area(t);
-  if (a === 0) return false;
+/** Shoelace area; positive for counter-clockwise vertices in a y-up space. */
+function signedArea(poly: Polygon): number {
+  let s = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return s / 2;
+}
+
+/** Strict point-in-convex-polygon test (points on an edge, within `eps`, count as outside). */
+export function containsStrictly(poly: Polygon, p: Point, eps = 0.5): boolean {
+  const sign = Math.sign(signedArea(poly));
+  if (sign === 0) return false;
   // Signed distances to each edge, normalised so that inside is positive.
-  const sign = Math.sign(cross(t[0], t[1], t[2]));
-  for (let i = 0; i < 3; i++) {
-    const p1 = t[i];
-    const p2 = t[(i + 1) % 3];
+  for (let i = 0; i < poly.length; i++) {
+    const p1 = poly[i];
+    const p2 = poly[(i + 1) % poly.length];
     const d = (sign * cross(p1, p2, p)) / distance(p1, p2);
     if (d <= eps) return false;
   }
@@ -84,22 +98,20 @@ function cross(o: Point, a: Point, b: Point): number {
 }
 
 /**
- * Grows a triangle outward by `d` on every side (each edge moves `d` away from the
- * incentre), used so clips keep the full width of the outline stroke.
+ * Grows a convex polygon outward by `d` on every side (each edge moves `d` along its
+ * outward normal), used so clips keep the full width of the outline stroke.
  */
-export function inflate(t: Triangle, d: number): Triangle {
-  const a = distance(t[1], t[2]);
-  const b = distance(t[0], t[2]);
-  const c = distance(t[0], t[1]);
-  const p = a + b + c;
-  const incentre = {
-    x: (a * t[0].x + b * t[1].x + c * t[2].x) / p,
-    y: (a * t[0].y + b * t[1].y + c * t[2].y) / p,
+export function inflate(poly: Polygon, d: number): Polygon {
+  const sign = Math.sign(signedArea(poly));
+  const normal = (a: Point, b: Point): Point => {
+    const len = distance(a, b);
+    return { x: (sign * (b.y - a.y)) / len, y: (-sign * (b.x - a.x)) / len };
   };
-  const inradius = (2 * area(t)) / p;
-  const k = (inradius + d) / inradius;
-  return t.map((v) => ({
-    x: incentre.x + (v.x - incentre.x) * k,
-    y: incentre.y + (v.y - incentre.y) * k,
-  })) as unknown as Triangle;
+  return poly.map((v, i) => {
+    const n1 = normal(poly[(i + poly.length - 1) % poly.length], v);
+    const n2 = normal(v, poly[(i + 1) % poly.length]);
+    // Miter: the corner moves along the bisector far enough that both edges move by d.
+    const k = d / (1 + n1.x * n2.x + n1.y * n2.y);
+    return { x: v.x + (n1.x + n2.x) * k, y: v.y + (n1.y + n2.y) * k };
+  });
 }

@@ -28,7 +28,7 @@
   cursor: grabbing;
 }
 
-/* Hit-testing comes from the triangle, not the image's transparent rectangle corners. */
+/* Hit-testing comes from the piece outline, not the image's transparent corners. */
 .piece image {
   pointer-events: none;
 }

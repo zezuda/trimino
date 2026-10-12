@@ -1,4 +1,4 @@
-import { Matrix, Point, Triangle, apply, multiply, rotate, translate } from './geometry';
+import { Matrix, Point, Polygon, apply, multiply, rotate, translate } from './geometry';
 import { Piece, Placement } from './models';
 
 /** Source view space → sheet space: move the centroid to the origin, rotate, then move to (x, y). */
@@ -7,9 +7,9 @@ export function placementMatrix(p: Placement, pieceCentroid: Point): Matrix {
 }
 
 /** Piece corners on the sheet. */
-export function placedTriangle(piece: Piece, p: Placement): Triangle {
+export function placedShape(piece: Piece, p: Placement): Polygon {
   const m = placementMatrix(p, piece.centroid);
-  return piece.viewTri.map((v) => apply(m, v)) as unknown as Triangle;
+  return piece.viewShape.map((v) => apply(m, v));
 }
 
 /** Normalises an angle to (-180, 180] so templates stay readable. */

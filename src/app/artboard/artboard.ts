@@ -2,7 +2,8 @@ import { Component, ElementRef, afterNextRender, computed, inject, linkedSignal,
 import { Point, distance } from '../core/geometry';
 import { LayoutStore } from '../core/layout.store';
 import { MM, Piece, Placement } from '../core/models';
-import { placedTriangle } from '../core/placement';
+import { PIECE_KIND } from '../core/piece-kind';
+import { placedShape } from '../core/placement';
 
 /** Snap distance in screen pixels (converted to sheet units on the fly). */
 const SNAP_PX = 12;
@@ -11,8 +12,6 @@ const ROTATE_SNAP_DEG = 15;
 const CLICK_PX = 3;
 /** Margin kept around pieces lying outside the sheet, in points. */
 const VIEW_MARGIN = 10 * MM;
-/** Keyboard / button rotation step: 60° keeps equilateral pieces on the same grid. */
-export const ROTATE_STEP = 60;
 
 type Drag =
   | { kind: 'move'; start: Point; origins: ReadonlyMap<number, Point>; pointerId: number }
@@ -37,8 +36,8 @@ interface Rect {
  * shows it); Alt disables snapping. The round handle of a single selected piece rotates
  * it (15° steps, Shift for free angle).
  *
- * Keyboard: arrows move the selection 1 mm (Shift 10 mm), R / Shift+R rotate it by 60°
- * as one block, Ctrl/Cmd+A selects all, Esc clears. Undo/redo (Ctrl/Cmd+Z, Ctrl+Y) is
+ * Keyboard: arrows move the selection 1 mm (Shift 10 mm), R / Shift+R rotate it by the
+ * module's step (60° triangles, 90° rectangles) as one block, Ctrl/Cmd+A selects all, Esc clears. Undo/redo (Ctrl/Cmd+Z, Ctrl+Y) is
  * handled app-wide in App. The selection toolbar in the app
  * offers the same without dragging.
  */
@@ -49,6 +48,7 @@ interface Rect {
 })
 export class Artboard {
   protected readonly store = inject(LayoutStore);
+  protected readonly kind = inject(PIECE_KIND);
   private readonly injector = inject(Injector);
   private readonly svg = viewChild.required<ElementRef<SVGSVGElement>>('svg');
   private drag: Drag | null = null;
@@ -80,7 +80,7 @@ export class Artboard {
       const { width, height } = sheet;
       let [minX, minY, maxX, maxY] = [0, 0, width, height];
       for (const p of placements) {
-        for (const v of placedTriangle(pieces[p.index], p)) {
+        for (const v of placedShape(pieces[p.index], p)) {
           minX = Math.min(minX, v.x - VIEW_MARGIN);
           minY = Math.min(minY, v.y - VIEW_MARGIN);
           maxX = Math.max(maxX, v.x + VIEW_MARGIN);
@@ -99,14 +99,14 @@ export class Artboard {
     return `translate(${p.x} ${p.y}) rotate(${p.rotation})`;
   }
 
-  /** Triangle corners relative to the centroid, for the outline polygon. */
+  /** Piece corners relative to the centroid, for the outline polygon. */
   protected localPoints(piece: Piece): string {
-    return piece.viewTri.map((v) => `${v.x - piece.centroid.x},${v.y - piece.centroid.y}`).join(' ');
+    return piece.viewShape.map((v) => `${v.x - piece.centroid.x},${v.y - piece.centroid.y}`).join(' ');
   }
 
   /** Distance of the rotate handle above the centroid. */
   protected handleOffset(piece: Piece): number {
-    return Math.max(...piece.viewTri.map((v) => distance(v, piece.centroid))) + 14;
+    return Math.max(...piece.viewShape.map((v) => distance(v, piece.centroid))) + 14;
   }
 
   protected label(p: Placement): string {
@@ -218,7 +218,7 @@ export class Artboard {
     if (moves[e.key]) {
       this.store.moveSelection(...moves[e.key]);
     } else if (e.key === 'r' || e.key === 'R') {
-      this.store.rotateSelection(e.shiftKey ? -ROTATE_STEP : ROTATE_STEP);
+      this.store.rotateSelection(e.shiftKey ? -this.kind.rotateStep : this.kind.rotateStep);
     } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
       this.store.selectAll();
     } else if (e.key === 'Escape') {
@@ -242,14 +242,14 @@ export class Artboard {
     const corners = (d: Point) =>
       moving.flatMap((p) => {
         const o = origins.get(p.index)!;
-        return placedTriangle(pieces[p.index], { ...p, x: o.x + d.x, y: o.y + d.y });
+        return placedShape(pieces[p.index], { ...p, x: o.x + d.x, y: o.y + d.y });
       });
 
     const own = corners(delta);
     let best: { d: number; dx: number; dy: number } | null = null;
     for (const other of this.store.placements()) {
       if (origins.has(other.index)) continue;
-      for (const target of placedTriangle(pieces[other.index], other)) {
+      for (const target of placedShape(pieces[other.index], other)) {
         for (const corner of own) {
           const d = distance(corner, target);
           if (d < threshold && (!best || d < best.d)) best = { d, dx: target.x - corner.x, dy: target.y - corner.y };
