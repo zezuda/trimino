@@ -9,7 +9,10 @@ import {
   SheetSize,
   SheetSpec,
   SourceDocument,
+  appendDocument,
   presetSize,
+  scalePercent,
+  snapScale,
 } from './models';
 import { PieceKindId } from './piece-kind';
 import { normaliseAngle, placedShape } from './placement';
@@ -65,14 +68,41 @@ export class LayoutStore {
     );
   });
 
-  /** Shows a new document with every piece where it was on the source page, centred on the sheet. */
-  load(doc: SourceDocument): void {
-    this.source.set(doc);
+  /**
+   * Adds a loaded PDF. The first one is shown with every piece where it was on the source
+   * page, centred on the sheet; the pages of each further one are laid out in a row to the
+   * right of everything already there. Undo history is cleared, as it does not track files.
+   */
+  add(doc: SourceDocument): void {
+    const current = this.source();
+    if (!current) {
+      this.source.set(doc);
+      this.layOutPages();
+    } else {
+      const merged = appendDocument(current, doc);
+      const right = Math.max(
+        this.sheet().width,
+        ...this.placements().flatMap((p) => placedShape(current.pieces[p.index], p).map((v) => v.x)),
+      );
+      this.source.set(merged);
+      this.placements.update((list) => [...list, ...this.pagePlacements(merged, current.pages.length, right + PAGE_GAP)]);
+    }
     this.clearSelection();
+    this.resetHistory();
+  }
+
+  /** Removes every loaded file and its pieces. */
+  clear(): void {
+    this.source.set(null);
+    this.placements.set([]);
+    this.clearSelection();
+    this.resetHistory();
+  }
+
+  private resetHistory(): void {
     this.undoStack = [];
     this.redoStack = [];
     this.lastStep = null;
-    this.layOutPages();
   }
 
   /** Back to the original positions (an undoable step). */
@@ -133,29 +163,39 @@ export class LayoutStore {
    */
   private layOutPages(): void {
     const doc = this.source();
-    if (!doc) return;
+    if (doc) this.placements.set(this.pagePlacements(doc, 0, null));
+  }
+
+  /**
+   * Placements for the pieces on pages `fromPage`… at their spot on their page, at full size.
+   * The pages go in a row to the right from `startX`; with `startX` null the first of them
+   * is centred on the sheet and the rest start beside the sheet.
+   */
+  private pagePlacements(doc: SourceDocument, fromPage: number, startX: number | null): Placement[] {
     const { width, height } = this.sheet();
-    const offsets: number[] = [];
-    let nextX = width + PAGE_GAP;
+    const offsets = new Map<number, number>();
+    let nextX = startX ?? width + PAGE_GAP;
     doc.pages.forEach((page, i) => {
-      if (i === 0) {
-        offsets.push((width - page.width) / 2);
+      if (i < fromPage) return;
+      if (i === fromPage && startX === null) {
+        offsets.set(i, (width - page.width) / 2);
       } else {
-        offsets.push(nextX);
+        offsets.set(i, nextX);
         nextX += page.width + PAGE_GAP;
       }
     });
-    this.placements.set(
-      doc.pieces.map((piece) => {
+    return doc.pieces
+      .filter((piece) => offsets.has(piece.page))
+      .map((piece) => {
         const page = doc.pages[piece.page];
         return {
           index: piece.index,
-          x: piece.centroid.x + offsets[piece.page],
+          x: piece.centroid.x + offsets.get(piece.page)!,
           y: piece.centroid.y + (height - page.height) / 2,
           rotation: 0,
+          scale: 1,
         };
-      }),
-    );
+      });
   }
 
   /**
@@ -315,6 +355,28 @@ export class LayoutStore {
     );
   }
 
+  /**
+   * Resizes every selected piece to `toPercent(its current percent)`, rounded to the
+   * allowed step. Piece centres move with it, relative to the mean of the centres (as in
+   * {@link rotateSelection}), so an assembled group grows or shrinks as one block.
+   */
+  resizeSelection(toPercent: (percent: number) => number): void {
+    const sel = this.selection();
+    const chosen = this.placements().filter((p) => sel.has(p.index));
+    if (chosen.length === 0) return;
+    this.checkpoint('resize');
+    const cx = chosen.reduce((a, p) => a + p.x, 0) / chosen.length;
+    const cy = chosen.reduce((a, p) => a + p.y, 0) / chosen.length;
+    this.placements.update((list) =>
+      list.map((p) => {
+        if (!sel.has(p.index)) return p;
+        const scale = snapScale(toPercent(scalePercent(p.scale)));
+        const k = scale / p.scale;
+        return { ...p, x: cx + (p.x - cx) * k, y: cy + (p.y - cy) * k, scale };
+      }),
+    );
+  }
+
   placementOf(index: number): Placement | undefined {
     return this.placements().find((p) => p.index === index);
   }
@@ -329,7 +391,7 @@ function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
     a.placements.length === b.placements.length &&
     a.placements.every((p, i) => {
       const q = b.placements[i];
-      return p.index === q.index && p.x === q.x && p.y === q.y && p.rotation === q.rotation;
+      return p.index === q.index && p.x === q.x && p.y === q.y && p.rotation === q.rotation && p.scale === q.scale;
     })
   );
 }

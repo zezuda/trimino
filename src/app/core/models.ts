@@ -12,7 +12,7 @@ import type { PieceKindId } from './piece-kind';
 export interface Piece {
   /** Stable index in reading order of the source — the key templates are stored by. */
   readonly index: number;
-  /** 0-based page of the source PDF. */
+  /** 0-based index into {@link SourceDocument.pages} (across all loaded files). */
   readonly page: number;
   readonly userShape: Polygon;
   readonly viewShape: Polygon;
@@ -24,27 +24,61 @@ export interface Piece {
 }
 
 export interface SourcePage {
+  /** Index into {@link SourceDocument.files}. */
+  readonly file: number;
+  /** 0-based page number within that file. */
+  readonly pageInFile: number;
   readonly width: number;
   readonly height: number;
   /** pdf.js viewport transform at scale 1: user space → view space. */
   readonly viewTransform: Matrix;
 }
 
-export interface SourceDocument {
+export interface SourceFile {
   readonly fileName: string;
   /** Original bytes, kept for the vector export. */
   readonly bytes: Uint8Array;
+}
+
+/** Every loaded PDF together; pages and pieces of later files follow those of earlier ones. */
+export interface SourceDocument {
+  readonly files: readonly SourceFile[];
   readonly pages: readonly SourcePage[];
   readonly pieces: readonly Piece[];
 }
 
-/** Where a piece sits on the sheet: its centroid position and clockwise rotation. */
+/** Joins two documents: pages and pieces of `next` are renumbered to follow those of `base`. */
+export function appendDocument(base: SourceDocument, next: SourceDocument): SourceDocument {
+  return {
+    files: [...base.files, ...next.files],
+    pages: [...base.pages, ...next.pages.map((p) => ({ ...p, file: p.file + base.files.length }))],
+    pieces: [
+      ...base.pieces,
+      ...next.pieces.map((p) => ({ ...p, index: p.index + base.pieces.length, page: p.page + base.pages.length })),
+    ],
+  };
+}
+
+/** Where a piece sits on the sheet: its centroid position, clockwise rotation and size. */
 export interface Placement {
   readonly index: number;
   readonly x: number;
   readonly y: number;
   readonly rotation: number;
+  /** Size relative to the original (1 = 100 %), always a multiple of {@link SCALE_PERCENT}.step. */
+  readonly scale: number;
 }
+
+/** Allowed piece sizes, in percent of the original. */
+export const SCALE_PERCENT = { min: 10, max: 500, step: 5 } as const;
+
+/** Rounds a size in percent to the allowed step and range and returns it as a factor. */
+export function snapScale(percent: number): number {
+  const { min, max, step } = SCALE_PERCENT;
+  return Math.min(max, Math.max(min, Math.round(percent / step) * step)) / 100;
+}
+
+export const scalePercent = (scale: number): number => Math.round(scale * 100);
 
 export type Orientation = 'portrait' | 'landscape';
 

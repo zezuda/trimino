@@ -93,8 +93,10 @@
   margin-bottom: 8px;
 }
 
-.nudge {
+.nudge,
+.resize {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -102,7 +104,8 @@
   width: 5.5em;
 }
 
-.angle input {
+.angle input,
+.scale input {
   width: 5em;
 }
 

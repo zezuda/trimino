@@ -27,7 +27,11 @@ npm run build      # static files in dist/trimino/browser
 ## How to use
 
 1. **Nahrát PDF** – the triangles are detected and shown on the sheet where they were in the original,
-   each with its number (the number is not printed).
+   each with its number (the number is not printed). Several files can be picked at once, and once
+   something is loaded the button becomes **Přidat PDF**: the pieces of further files are added to the
+   existing ones (numbered after them, their pages laid out to the right of everything on the board).
+   Adding a file clears the undo history; the active template is applied only when the board was empty.
+   **Smazat vše** removes all loaded files and pieces.
 2. Arrange the pieces:
    - **select**: click a piece; **Shift+click** adds/removes it; **drag on an empty spot** draws a
      selection box (Shift adds to the current selection) – a piece is caught when its centre is inside
@@ -37,7 +41,12 @@ npm run build      # static files in dist/trimino/browser
      dashed guide shows it). Hold **Alt** to turn snapping off;
    - **drag the round handle** (single piece only) to rotate it in 15° steps (hold **Shift** for any angle);
    - **keyboard** – Tab to a piece, arrows move the selection 1 mm (**Shift** = 10 mm), **R** / **Shift+R**
-     rotates it by ±60° (Domino ±90°) as one block (an assembled group stays assembled), **Esc** deselects;
+     rotates it by ±60° (Domino ±90°) as one block (an assembled group stays assembled), **+** / **−**
+     resizes it by 5 %, **Esc** deselects;
+   - **resize** – the size in % of the original (10–500 %, steps of 5 %) is shown in the bar above the
+     sheet; **−** / **+** change it by 5 %, or type a value (rounded to 5 %). A multi-selection is resized
+     as one block around its centre (an assembled group stays assembled); if its pieces have different
+     sizes the field is empty and ± changes each piece by 5 %;
    - **Ctrl/Cmd+Z** undoes the last change (moves, rotations, sheet size, template, reset),
      **Ctrl/Cmd+Shift+Z** or **Ctrl+Y** redoes it. Held arrow keys count as one step;
    - the bar above the sheet does the same with buttons (±60° / ±90°, exact angle for a single piece, 5 mm nudges).
@@ -56,8 +65,8 @@ npm run build      # static files in dist/trimino/browser
   the active one.
 - The active template (**Šablona** select) is applied automatically to every PDF you load afterwards,
   and immediately when you pick it.
-- A template stores, for every piece, its **index**, the position of its centre on the sheet (pt) and its
-  **rotation** (degrees, clockwise), plus the sheet orientation and paper size (templates saved before
+- A template stores, for every piece, its **index**, the position of its centre on the sheet (pt), its
+  **rotation** (degrees, clockwise) and its **scale** (1 = 100 %; missing in older templates = 100 %), plus the sheet orientation and paper size (templates saved before
   paper sizes existed load as A4). Pieces are indexed in reading order of
   the source PDF (rows top to bottom, then left to right), so any PDF from the same generator with the
   same piece layout is reordered the same way. If the new PDF has more pieces than the template, the

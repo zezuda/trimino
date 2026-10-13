@@ -51,7 +51,7 @@ export class PdfSourceService {
         const page = await doc.getPage(p);
         const viewport = page.getViewport({ scale: 1 });
         const viewTransform = viewport.transform as unknown as Matrix;
-        pages.push({ width: viewport.width, height: viewport.height, viewTransform });
+        pages.push({ file: 0, pageInFile: p - 1, width: viewport.width, height: viewport.height, viewTransform });
 
         const segments = extractStrokedSegments(await page.getOperatorList(), OPS);
         const found = kind.detect(segments).map((userShape) => ({
@@ -78,7 +78,7 @@ export class PdfSourceService {
       if (pieces.length === 0) {
         throw new PdfLoadError(kind.notFound);
       }
-      return { fileName: file.name, bytes, pages, pieces };
+      return { files: [{ fileName: file.name, bytes }], pages, pieces };
     } finally {
       await task.destroy();
     }

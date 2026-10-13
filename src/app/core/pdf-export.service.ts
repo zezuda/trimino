@@ -6,7 +6,7 @@ import { placementMatrix } from './placement';
 import { CLIP_BLEED } from './pdf-source.service';
 
 /**
- * Builds the sheet as a vector PDF: every source page is embedded once as a form
+ * Builds the sheet as a vector PDF: every source page (of every loaded file) is embedded once as a form
  * XObject and each piece draws it through a clip of its outline, moved and rotated into
  * place. Text and lines stay crisp for printing, unlike the raster previews.
  */
@@ -25,7 +25,7 @@ export class PdfExportService {
       popGraphicsState,
       pushGraphicsState,
     } = await import('pdf-lib'); // loaded on demand, only needed for export
-    const src = await PDFDocument.load(source.bytes, { ignoreEncryption: true });
+    const files = await Promise.all(source.files.map((f) => PDFDocument.load(f.bytes, { ignoreEncryption: true })));
     const out = await PDFDocument.create();
     const { width, height } = sheetSize;
     const sheet = out.addPage([width, height]);
@@ -35,7 +35,8 @@ export class PdfExportService {
     const xObjectFor = async (pageIndex: number): Promise<PDFName> => {
       let name = xObjects.get(pageIndex);
       if (!name) {
-        const page = src.getPage(pageIndex);
+        const { file, pageInFile } = source.pages[pageIndex];
+        const page = files[file].getPage(pageInFile);
         const mb = page.getMediaBox();
         const embedded = await out.embedPage(
           page,
@@ -69,7 +70,7 @@ export class PdfExportService {
       );
     }
 
-    out.setTitle(source.fileName.replace(/\.pdf$/i, ''));
+    out.setTitle(source.files[0].fileName.replace(/\.pdf$/i, ''));
     out.setCreator('Trimino');
     return out.save();
   }

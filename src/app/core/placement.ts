@@ -1,9 +1,12 @@
-import { Matrix, Point, Polygon, apply, multiply, rotate, translate } from './geometry';
+import { Matrix, Point, Polygon, apply, multiply, rotate, scale, translate } from './geometry';
 import { Piece, Placement } from './models';
 
-/** Source view space → sheet space: move the centroid to the origin, rotate, then move to (x, y). */
+/** Source view space → sheet space: move the centroid to the origin, resize, rotate, then move to (x, y). */
 export function placementMatrix(p: Placement, pieceCentroid: Point): Matrix {
-  return multiply(translate(p.x, p.y), multiply(rotate(p.rotation), translate(-pieceCentroid.x, -pieceCentroid.y)));
+  return multiply(
+    translate(p.x, p.y),
+    multiply(rotate(p.rotation), multiply(scale(p.scale), translate(-pieceCentroid.x, -pieceCentroid.y))),
+  );
 }
 
 /** Piece corners on the sheet. */

@@ -5,8 +5,8 @@
       <a [routerLink]="'/' + k.id" routerLinkActive="active" ariaCurrentWhenActive="page">{{ k.title }}</a>
     }
   </nav>
-  @if (store.source(); as src) {
-    <span class="file">{{ src.fileName }}</span>
+  @if (fileNames()) {
+    <span class="file">{{ fileNames() }}</span>
   }
 </header>
 
@@ -14,11 +14,12 @@
   <section class="controls" aria-label="Ovládání">
     <div class="group">
       <label class="btn primary" [class.disabled]="busy()">
-        Nahrát PDF
+        {{ store.source() ? 'Přidat PDF' : 'Nahrát PDF' }}
         <input
           #pdfInput
           type="file"
           accept="application/pdf,.pdf"
+          multiple
           class="visually-hidden"
           [disabled]="busy()"
           (change)="onPdf(pdfInput)"
@@ -29,6 +30,9 @@
       </button>
       <button type="button" class="btn" [disabled]="!store.source() || busy()" (click)="downloadSheet('jpg')">
         Stáhnout JPG
+      </button>
+      <button type="button" class="btn danger" [disabled]="!store.source() || busy()" (click)="deleteAll()">
+        Smazat vše
       </button>
     </div>
 
@@ -149,6 +153,23 @@
             <input #angle type="number" step="15" [value]="p.rotation" (change)="setRotation(angle.value)" />°
           </label>
         }
+        <span class="resize">
+          <button type="button" class="btn icon" (click)="resizeBy(-SCALE_PERCENT.step)" [attr.aria-label]="'Zmenšit o ' + SCALE_PERCENT.step + ' %'">−</button>
+          <label class="scale">
+            <span class="visually-hidden">Velikost v procentech</span>
+            <input
+              #scale
+              type="number"
+              [step]="SCALE_PERCENT.step"
+              [min]="SCALE_PERCENT.min"
+              [max]="SCALE_PERCENT.max"
+              [value]="selectionScale() ?? ''"
+              placeholder="různé"
+              (change)="setScale(scale)"
+            />&nbsp;%
+          </label>
+          <button type="button" class="btn icon" (click)="resizeBy(SCALE_PERCENT.step)" [attr.aria-label]="'Zvětšit o ' + SCALE_PERCENT.step + ' %'">+</button>
+        </span>
         <span class="nudge">
           <button type="button" class="btn icon" (click)="nudge(-1, 0)" [attr.aria-label]="'Posunout doleva o ' + NUDGE_MM + ' mm'">←</button>
           <button type="button" class="btn icon" (click)="nudge(0, -1)" [attr.aria-label]="'Posunout nahoru o ' + NUDGE_MM + ' mm'">↑</button>

@@ -49,6 +49,8 @@ export function invert(m: Matrix): Matrix {
 
 export const translate = (x: number, y: number): Matrix => [1, 0, 0, 1, x, y];
 
+export const scale = (s: number): Matrix => [s, 0, 0, s, 0, 0];
+
 /** Rotation by `deg` degrees; clockwise on screen in a y-down space. */
 export function rotate(deg: number): Matrix {
   const r = (deg * Math.PI) / 180;

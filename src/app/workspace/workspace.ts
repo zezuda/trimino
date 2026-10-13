@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Artboard } from '../artboard/artboard';
 import { LayoutStore } from '../core/layout.store';
-import { CUSTOM_MM, MM, Orientation, PAPER_PRESETS, PaperPreset } from '../core/models';
+import { CUSTOM_MM, MM, Orientation, PAPER_PRESETS, PaperPreset, SCALE_PERCENT, scalePercent } from '../core/models';
 import { JpgExportService } from '../core/jpg-export.service';
 import { PdfExportService } from '../core/pdf-export.service';
 import { PdfLoadError, PdfSourceService } from '../core/pdf-source.service';
@@ -12,7 +12,7 @@ import { TemplateService } from '../core/template.service';
 const NUDGE_MM = 5;
 
 /**
- * One module (Trimino or Domino): load a PDF, arrange its pieces, export, templates.
+ * One module (Trimino or Domino): load one or more PDFs, arrange their pieces, export, templates.
  * The module, its store and its templates come from the route (see app.routes.ts), so
  * each module keeps its document and layout while the other one is open.
  */
@@ -50,6 +50,14 @@ export class Workspace {
     height: Math.round(this.store.sheet().height / MM),
   }));
   protected readonly NUDGE_MM = NUDGE_MM;
+  protected readonly SCALE_PERCENT = SCALE_PERCENT;
+  protected readonly fileNames = computed(() => this.store.source()?.files.map((f) => f.fileName).join(', ') ?? '');
+  /** Size of the selected pieces in percent, or null when they differ. */
+  protected readonly selectionScale = computed(() => {
+    const sel = this.store.selection();
+    const sizes = new Set(this.store.placements().filter((p) => sel.has(p.index)).map((p) => scalePercent(p.scale)));
+    return sizes.size === 1 ? [...sizes][0] : null;
+  });
   protected readonly selectionLabel = computed(() => {
     const single = this.store.single();
     if (single !== null) return `Dílek ${single + 1}`;
@@ -76,24 +84,47 @@ export class Workspace {
     e.preventDefault();
   }
 
+  /**
+   * Adds the chosen PDFs to what is already loaded, one after another. The active template
+   * is applied only when the sheet was empty: on top of an arranged layout it would
+   * rearrange that too.
+   */
   protected async onPdf(input: HTMLInputElement): Promise<void> {
-    const file = input.files?.[0];
+    const files = [...(input.files ?? [])];
     input.value = '';
-    if (!file) return;
+    if (files.length === 0) return;
+    const wasEmpty = !this.store.source();
     this.busy.set(true);
     this.error.set('');
-    try {
-      const doc = await this.pdfSource.load(file, this.kind);
-      this.pdfSource.release(this.store.source());
-      this.store.load(doc);
-      const t = this.templates.active();
-      this.status.set(`${doc.pieces.length} dílků` + (t ? ` · ${this.applyTemplateMessage(t.id)}` : ''));
-    } catch (e) {
-      this.error.set(e instanceof PdfLoadError ? e.message : 'Zpracování PDF selhalo.');
-      if (!(e instanceof PdfLoadError)) console.error(e);
-    } finally {
-      this.busy.set(false);
+    const errors: string[] = [];
+    let added = 0;
+    for (const file of files) {
+      try {
+        const doc = await this.pdfSource.load(file, this.kind);
+        this.store.add(doc);
+        added += doc.pieces.length;
+      } catch (e) {
+        errors.push(`${file.name}: ${e instanceof PdfLoadError ? e.message : 'Zpracování PDF selhalo.'}`);
+        if (!(e instanceof PdfLoadError)) console.error(e);
+      }
     }
+    this.busy.set(false);
+    if (errors.length) this.error.set(errors.join(' '));
+    if (!added) return;
+    const t = wasEmpty ? this.templates.active() : null;
+    const total = this.store.source()!.pieces.length;
+    this.status.set(
+      (wasEmpty ? `${total} dílků` : `Přidáno ${added} dílků, celkem ${total}`) +
+        (t ? ` · ${this.applyTemplateMessage(t.id)}` : ''),
+    );
+  }
+
+  protected deleteAll(): void {
+    if (!confirm('Odstranit všechna nahraná PDF a jejich dílky?')) return;
+    this.pdfSource.release(this.store.source());
+    this.store.clear();
+    this.error.set('');
+    this.status.set('');
   }
 
   protected onTemplateChange(id: string): void {
@@ -176,6 +207,18 @@ export class Workspace {
     }
   }
 
+  protected resizeBy(deltaPercent: number): void {
+    this.store.resizeSelection((percent) => percent + deltaPercent);
+  }
+
+  /** Sets every selected piece to the typed size, rounded to the allowed step. */
+  protected setScale(input: HTMLInputElement): void {
+    const percent = Number(input.value);
+    if (input.value !== '' && Number.isFinite(percent)) this.store.resizeSelection(() => percent);
+    // Show the rounded value even when it did not change the stored one.
+    input.value = String(this.selectionScale() ?? '');
+  }
+
   protected nudge(dx: number, dy: number): void {
     this.store.moveSelection(dx * NUDGE_MM * MM, dy * NUDGE_MM * MM);
   }
@@ -199,7 +242,7 @@ export class Workspace {
         format === 'pdf'
           ? new Blob([pdf as BlobPart], { type: 'application/pdf' })
           : await this.jpgExport.export(pdf);
-      download(blob, `${source.fileName.replace(/\.pdf$/i, '')}-rozlozeni.${format}`);
+      download(blob, `${source.files[0].fileName.replace(/\.pdf$/i, '')}-rozlozeni.${format}`);
     } catch (e) {
       console.error(e);
       this.error.set(format === 'pdf' ? 'Vytvoření PDF selhalo.' : 'Vytvoření JPG selhalo.');

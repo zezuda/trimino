@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { CUSTOM_MM, LayoutTemplate, MM, PAPER_PRESETS, Placement, SheetSpec } from './models';
+import { CUSTOM_MM, LayoutTemplate, MM, PAPER_PRESETS, Placement, SheetSpec, snapScale } from './models';
 import { PIECE_KIND, PIECE_KINDS } from './piece-kind';
 
 const MAX_PIECES = 500;
@@ -97,11 +97,13 @@ function validate(v: unknown): LayoutTemplate | null {
   const seen = new Set<number>();
   for (const p of o['placements'] as unknown[]) {
     if (typeof p !== 'object' || p === null) return null;
-    const { index, x, y, rotation } = p as Record<string, unknown>;
+    const { index, x, y, rotation, scale } = p as Record<string, unknown>;
     if (!Number.isInteger(index) || (index as number) < 0 || seen.has(index as number)) return null;
     if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(rotation)) return null;
+    // Missing in templates saved before resizing existed, which means 100 %.
+    if (scale !== undefined && !isFiniteNumber(scale)) return null;
     seen.add(index as number);
-    placements.push({ index: index as number, x, y, rotation });
+    placements.push({ index: index as number, x, y, rotation, scale: snapScale((scale ?? 1) * 100) });
   }
 
   const sheet = validateSheet(o['sheet']);

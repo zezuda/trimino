@@ -29,23 +29,26 @@
       (focus)="onPieceFocus(p.index)"
       (keydown)="onKey($event)"
     >
-      <image
-        [attr.href]="piece.imageUrl"
-        [attr.x]="piece.imageBox.x"
-        [attr.y]="piece.imageBox.y"
-        [attr.width]="piece.imageBox.width"
-        [attr.height]="piece.imageBox.height"
-        preserveAspectRatio="none"
-      />
-      <polygon class="outline" [attr.points]="localPoints(piece)" />
+      <!-- Only the piece is resized; the badge and the handle keep their size. -->
+      <g [attr.transform]="'scale(' + p.scale + ')'">
+        <image
+          [attr.href]="piece.imageUrl"
+          [attr.x]="piece.imageBox.x"
+          [attr.y]="piece.imageBox.y"
+          [attr.width]="piece.imageBox.width"
+          [attr.height]="piece.imageBox.height"
+          preserveAspectRatio="none"
+        />
+        <polygon class="outline" [attr.points]="localPoints(piece)" />
+      </g>
       <text class="badge" aria-hidden="true" y="4">{{ p.index + 1 }}</text>
       @if (store.single() === p.index) {
-        <line class="handle-arm" x1="0" y1="0" x2="0" [attr.y2]="-handleOffset(piece)" />
+        <line class="handle-arm" x1="0" y1="0" x2="0" [attr.y2]="-handleOffset(piece, p.scale)" />
         <circle
           class="handle"
           r="7"
           cx="0"
-          [attr.cy]="-handleOffset(piece)"
+          [attr.cy]="-handleOffset(piece, p.scale)"
           (pointerdown)="onHandleDown($event, p.index)"
         >
           <title>Otočit</title>
@@ -64,4 +67,4 @@
     <rect class="marquee" [attr.x]="m.x" [attr.y]="m.y" [attr.width]="m.width" [attr.height]="m.height" />
   }
 </svg>
-<p id="artboard-help" class="visually-hidden">Šipky posun, R otočení o {{ kind.rotateStep }}°, Ctrl+A vybrat vše, Ctrl+Z zpět, Ctrl+Y znovu.</p>
+<p id="artboard-help" class="visually-hidden">Šipky posun, R otočení o {{ kind.rotateStep }}°, plus a minus změna velikosti o 5 %, Ctrl+A vybrat vše, Ctrl+Z zpět, Ctrl+Y znovu.</p>

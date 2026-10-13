@@ -1,7 +1,7 @@
 import { Component, ElementRef, afterNextRender, computed, inject, linkedSignal, signal, viewChild, Injector } from '@angular/core';
 import { Point, distance } from '../core/geometry';
 import { LayoutStore } from '../core/layout.store';
-import { MM, Piece, Placement } from '../core/models';
+import { MM, Piece, Placement, SCALE_PERCENT, scalePercent } from '../core/models';
 import { PIECE_KIND } from '../core/piece-kind';
 import { placedShape } from '../core/placement';
 
@@ -37,7 +37,8 @@ interface Rect {
  * it (15° steps, Shift for free angle).
  *
  * Keyboard: arrows move the selection 1 mm (Shift 10 mm), R / Shift+R rotate it by the
- * module's step (60° triangles, 90° rectangles) as one block, Ctrl/Cmd+A selects all, Esc clears. Undo/redo (Ctrl/Cmd+Z, Ctrl+Y) is
+ * module's step (60° triangles, 90° rectangles) as one block, + / − resize it by 5 %,
+ * Ctrl/Cmd+A selects all, Esc clears. Undo/redo (Ctrl/Cmd+Z, Ctrl+Y) is
  * handled app-wide in App. The selection toolbar in the app
  * offers the same without dragging.
  */
@@ -105,12 +106,12 @@ export class Artboard {
   }
 
   /** Distance of the rotate handle above the centroid. */
-  protected handleOffset(piece: Piece): number {
-    return Math.max(...piece.viewShape.map((v) => distance(v, piece.centroid))) + 14;
+  protected handleOffset(piece: Piece, scale: number): number {
+    return Math.max(...piece.viewShape.map((v) => distance(v, piece.centroid))) * scale + 14;
   }
 
   protected label(p: Placement): string {
-    return `Dílek ${p.index + 1}, otočení ${p.rotation}°`;
+    return `Dílek ${p.index + 1}, otočení ${p.rotation}°, velikost ${scalePercent(p.scale)} %`;
   }
 
   protected onBackgroundDown(e: PointerEvent): void {
@@ -217,6 +218,9 @@ export class Artboard {
     };
     if (moves[e.key]) {
       this.store.moveSelection(...moves[e.key]);
+    } else if (e.key === '+' || e.key === '=' || e.key === '-') {
+      const step = e.key === '-' ? -SCALE_PERCENT.step : SCALE_PERCENT.step;
+      this.store.resizeSelection((percent) => percent + step);
     } else if (e.key === 'r' || e.key === 'R') {
       this.store.rotateSelection(e.shiftKey ? -this.kind.rotateStep : this.kind.rotateStep);
     } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
