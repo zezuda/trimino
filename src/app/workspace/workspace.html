@@ -1,243 +1,256 @@
-<header class="top">
-  <h1 class="visually-hidden">{{ kind.title }}</h1>
-  <nav class="modules" aria-label="Druh dílků">
-    @for (k of kinds; track k.id) {
-      <a [routerLink]="'/' + k.id" routerLinkActive="active" ariaCurrentWhenActive="page">{{
-        k.title
-      }}</a>
-    }
-  </nav>
-  @if (fileNames()) {
-    <span class="file">{{ fileNames() }}</span>
-  }
-</header>
-
-<main>
-  <div class="controls">
-    <section class="panel" aria-labelledby="panel-files">
-      <h2 id="panel-files" class="panel-title">Soubory</h2>
-      <div class="row">
-        <label class="btn primary" [class.disabled]="busy()">
-          {{ store.source() ? 'Přidat PDF' : 'Nahrát PDF' }}
-          <input
-            #pdfInput
-            type="file"
-            accept="application/pdf,.pdf"
-            multiple
-            class="visually-hidden"
-            [disabled]="busy()"
-            (change)="onPdf(pdfInput)"
-          />
-        </label>
-        <button
-          type="button"
-          class="btn danger"
-          [disabled]="!store.source() || busy()"
-          (click)="deleteAll()"
-        >
-          Smazat vše
-        </button>
-      </div>
-      <div class="row">
-        <span class="row-label">Stáhnout</span>
-        <span class="joined">
-          <button
-            type="button"
-            class="btn"
-            [disabled]="!store.source() || busy()"
-            (click)="downloadSheet('pdf')"
-          >
-            PDF
-          </button>
-          <button
-            type="button"
-            class="btn"
-            [disabled]="!store.source() || busy()"
-            (click)="downloadSheet('jpg')"
-          >
-            JPG
-          </button>
-        </span>
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="panel-template">
-      <h2 id="panel-template" class="panel-title">Šablona</h2>
-      @if (saving()) {
-        <form class="row" (submit)="saveTemplate($event)">
-          <label for="template-name" class="visually-hidden">Název šablony</label>
-          <input
-            id="template-name"
-            class="grow"
-            type="text"
-            maxlength="80"
-            required
-            autocomplete="off"
-            placeholder="Název šablony"
-            [value]="templateName()"
-            (input)="templateName.set(nameInput.value)"
-            #nameInput
-          />
-          <button type="submit" class="btn primary">Uložit</button>
-          <button type="button" class="btn" (click)="saving.set(false)">Zrušit</button>
-        </form>
-      } @else {
-        <div class="row">
-          <label for="template" class="visually-hidden">Aktivní šablona</label>
-          <select
-            id="template"
-            class="grow"
-            [value]="templates.activeId() ?? ''"
-            (change)="onTemplateChange(templateSelect.value)"
-            #templateSelect
-          >
-            <option value="">— žádná —</option>
-            @for (t of templates.templates(); track t.id) {
-              <option [value]="t.id" [selected]="t.id === templates.activeId()">
-                {{ t.name }}
-              </option>
-            }
-          </select>
-          <button type="button" class="btn" [disabled]="!store.source()" (click)="startSave()">
-            Uložit
-          </button>
-        </div>
+<aside class="sidebar">
+  <header class="top">
+    <h1 class="visually-hidden">{{ kind.title }}</h1>
+    <nav class="modules" aria-label="Druh dílků">
+      @for (k of kinds; track k.id) {
+        <a [routerLink]="'/' + k.id" routerLinkActive="active" ariaCurrentWhenActive="page">{{
+          k.title
+        }}</a>
       }
-      <div class="row">
-        <span class="joined">
-          <button
-            type="button"
-            class="btn"
-            [disabled]="!templates.activeId()"
-            (click)="exportTemplate()"
-          >
-            Export
-          </button>
-          <label class="btn">
-            Import
-            <input
-              #jsonInput
-              type="file"
-              accept="application/json,.json"
-              class="visually-hidden"
-              (change)="importTemplate(jsonInput)"
-            />
-          </label>
-        </span>
-        <button
-          type="button"
-          class="btn danger"
-          [disabled]="!templates.activeId()"
-          (click)="deleteTemplate()"
-        >
-          Smazat
-        </button>
-      </div>
-    </section>
+    </nav>
+  </header>
 
-    <section class="panel" aria-labelledby="panel-sheet">
-      <h2 id="panel-sheet" class="panel-title">Arch</h2>
-      <div class="row">
-        <label for="paper" class="visually-hidden">Velikost papíru</label>
-        <select id="paper" #paper (change)="store.setPreset($any(paper.value))">
-          @for (p of presets; track p.value) {
-            <option [value]="p.value" [selected]="store.preset() === p.value">{{ p.label }}</option>
-          }
-        </select>
-        @if (store.preset() === 'custom') {
-          <span class="custom-size">
-            <label class="size">
-              <span class="visually-hidden">Šířka v mm</span>
-              <input
-                #w
-                type="number"
-                inputmode="decimal"
-                [min]="CUSTOM_MM.min"
-                [max]="CUSTOM_MM.max"
-                [value]="sheetMm().width"
-                (change)="setCustomSize(w.value, h.value)"
-              />
-            </label>
-            <span aria-hidden="true">×</span>
-            <label class="size">
-              <span class="visually-hidden">Výška v mm</span>
-              <input
-                #h
-                type="number"
-                inputmode="decimal"
-                [min]="CUSTOM_MM.min"
-                [max]="CUSTOM_MM.max"
-                [value]="sheetMm().height"
-                (change)="setCustomSize(w.value, h.value)"
-              />
-              mm
-            </label>
-          </span>
-        }
-      </div>
-      <div class="row">
-        <fieldset class="segmented">
-          <legend class="visually-hidden">Orientace</legend>
-          @for (
-            o of [
-              { v: 'portrait', l: 'Na výšku' },
-              { v: 'landscape', l: 'Na šířku' },
-            ];
-            track o.v
-          ) {
-            <label>
-              <input
-                type="radio"
-                name="orientation"
-                class="visually-hidden"
-                [value]="o.v"
-                [checked]="store.orientation() === o.v"
-                (change)="setOrientation($any(o.v))"
-              />
-              {{ o.l }}
-            </label>
-          }
-        </fieldset>
-        <span class="sheets" role="group" aria-label="Počet archů">
-          <span class="sheets" role="group" aria-label="Počet archů">
-            <button
-              type="button"
-              class="btn icon"
-              [disabled]="store.sheetCount() <= 1"
-              (click)="store.addSheet(-1)"
-              aria-label="Odebrat poslední arch"
-            >
-              −
-            </button>
-            <span class="count" aria-live="polite"
-              >{{ store.sheetCount() }}&nbsp;{{
-                store.sheetCount() === 1 ? 'arch' : store.sheetCount() <= 4 ? 'archy' : 'archů'
-              }}</span
-            >
-            <button
-              type="button"
-              class="btn icon"
-              [disabled]="store.sheetCount() >= MAX_SHEETS"
-              (click)="store.addSheet(1)"
-              aria-label="Přidat arch"
-            >
-              +
-            </button>
-          </span>
-        </span>
-      </div>
-      <div class="row">
+  <section class="section" aria-labelledby="sec-files">
+    <h2 id="sec-files" class="section-title">Soubory</h2>
+    <div class="row">
+      <label class="btn primary" [class.disabled]="busy()">
+        {{ store.source() ? 'Přidat PDF' : 'Nahrát PDF' }}
+        <input
+          #pdfInput
+          type="file"
+          accept="application/pdf,.pdf"
+          multiple
+          class="visually-hidden"
+          [disabled]="busy()"
+          (change)="onPdf(pdfInput)"
+        />
+      </label>
+      <button
+        type="button"
+        class="btn danger"
+        [disabled]="!store.source() || busy()"
+        (click)="deleteAll()"
+      >
+        Smazat vše
+      </button>
+    </div>
+    @if (fileNames()) {
+      <p class="file">{{ fileNames() }}</p>
+    }
+    <div class="row">
+      <span class="row-label">Stáhnout</span>
+      <span class="joined">
         <button
           type="button"
           class="btn"
-          [disabled]="!store.source()"
-          (click)="store.resetLayout()"
+          [disabled]="!store.source() || busy()"
+          (click)="downloadSheet('pdf')"
         >
-          Původní rozložení
+          PDF
+        </button>
+        <button
+          type="button"
+          class="btn"
+          [disabled]="!store.source() || busy()"
+          (click)="downloadSheet('jpg')"
+        >
+          JPG
+        </button>
+      </span>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="sec-template">
+    <h2 id="sec-template" class="section-title">Šablona</h2>
+    @if (saving()) {
+      <form class="row" (submit)="saveTemplate($event)">
+        <label for="template-name" class="visually-hidden">Název šablony</label>
+        <input
+          id="template-name"
+          class="grow"
+          type="text"
+          maxlength="80"
+          required
+          autocomplete="off"
+          placeholder="Název šablony"
+          [value]="templateName()"
+          (input)="templateName.set(nameInput.value)"
+          #nameInput
+        />
+        <button type="submit" class="btn primary">Uložit</button>
+        <button type="button" class="btn" (click)="saving.set(false)">Zrušit</button>
+      </form>
+    } @else {
+      <div class="row">
+        <label for="template" class="visually-hidden">Aktivní šablona</label>
+        <select
+          id="template"
+          class="grow"
+          [value]="templates.activeId() ?? ''"
+          (change)="onTemplateChange(templateSelect.value)"
+          #templateSelect
+        >
+          <option value="">— žádná —</option>
+          @for (t of templates.templates(); track t.id) {
+            <option [value]="t.id" [selected]="t.id === templates.activeId()">{{ t.name }}</option>
+          }
+        </select>
+        <button type="button" class="btn" [disabled]="!store.source()" (click)="startSave()">
+          Uložit
         </button>
       </div>
-    </section>
-  </div>
+    }
+    <div class="row">
+      <span class="joined">
+        <button
+          type="button"
+          class="btn"
+          [disabled]="!templates.activeId()"
+          (click)="exportTemplate()"
+        >
+          Export
+        </button>
+        <label class="btn">
+          Import
+          <input
+            #jsonInput
+            type="file"
+            accept="application/json,.json"
+            class="visually-hidden"
+            (change)="importTemplate(jsonInput)"
+          />
+        </label>
+      </span>
+      <button
+        type="button"
+        class="btn danger"
+        [disabled]="!templates.activeId()"
+        (click)="deleteTemplate()"
+      >
+        Smazat
+      </button>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="sec-pages">
+    <h2 id="sec-pages" class="section-title">Stránky</h2>
+    <div class="row">
+      <label for="paper" class="visually-hidden">Velikost papíru</label>
+      <select id="paper" #paper (change)="store.setPreset($any(paper.value))">
+        @for (p of presets; track p.value) {
+          <option [value]="p.value" [selected]="store.preset() === p.value">{{ p.label }}</option>
+        }
+      </select>
+      <fieldset class="segmented">
+        <legend class="visually-hidden">Orientace</legend>
+        @for (
+          o of [
+            { v: 'portrait', l: 'Na výšku' },
+            { v: 'landscape', l: 'Na šířku' },
+          ];
+          track o.v
+        ) {
+          <label>
+            <input
+              type="radio"
+              name="orientation"
+              class="visually-hidden"
+              [value]="o.v"
+              [checked]="store.orientation() === o.v"
+              (change)="setOrientation($any(o.v))"
+            />
+            {{ o.l }}
+          </label>
+        }
+      </fieldset>
+    </div>
+    @if (store.preset() === 'custom') {
+      <div class="row">
+        <label class="size">
+          <span class="visually-hidden">Šířka v mm</span>
+          <input
+            #w
+            type="number"
+            inputmode="decimal"
+            [min]="CUSTOM_MM.min"
+            [max]="CUSTOM_MM.max"
+            [value]="sheetMm().width"
+            (change)="setCustomSize(w.value, h.value)"
+          />
+        </label>
+        <span aria-hidden="true">×</span>
+        <label class="size">
+          <span class="visually-hidden">Výška v mm</span>
+          <input
+            #h
+            type="number"
+            inputmode="decimal"
+            [min]="CUSTOM_MM.min"
+            [max]="CUSTOM_MM.max"
+            [value]="sheetMm().height"
+            (change)="setCustomSize(w.value, h.value)"
+          />
+          mm
+        </label>
+      </div>
+    }
+    <div class="row" role="group" aria-label="Počet stránek">
+      <span class="row-label" aria-hidden="true">Počet</span>
+      <button
+        type="button"
+        class="btn icon"
+        [disabled]="store.sheetCount() <= 1"
+        (click)="store.addSheet(-1)"
+        aria-label="Odebrat poslední stránku"
+      >
+        −
+      </button>
+      <span class="count" aria-live="polite">{{ store.sheetCount() }}</span>
+      <button
+        type="button"
+        class="btn icon"
+        [disabled]="store.sheetCount() >= MAX_SHEETS"
+        (click)="store.addSheet(1)"
+        aria-label="Přidat stránku"
+      >
+        +
+      </button>
+    </div>
+    <div class="row">
+      <button
+        type="button"
+        class="btn"
+        [disabled]="!store.source()"
+        (click)="store.resetLayout()"
+      >
+        Původní rozložení
+      </button>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="sec-header">
+    <h2 id="sec-header" class="section-title">Záhlaví</h2>
+    <label for="header-text" class="visually-hidden">Text záhlaví</label>
+    <input
+      #headerText
+      id="header-text"
+      type="text"
+      [attr.maxlength]="HEADER.maxLength"
+      autocomplete="off"
+      placeholder="Text nahoře na stránce"
+      [value]="store.header().text"
+      (input)="store.header.update((h) => ({ ...h, text: headerText.value }))"
+    />
+    <label class="check">
+      <input
+        #headerFirst
+        type="checkbox"
+        [checked]="store.header().onFirstPage"
+        (change)="store.header.update((h) => ({ ...h, onFirstPage: headerFirst.checked }))"
+      />
+      Zahrnout na první stránku
+    </label>
+  </section>
 
   <div class="messages" aria-live="polite">
     @if (busy()) {
@@ -248,12 +261,14 @@
       <p>
         {{ status() }}
         @if (store.overflowing().size) {
-          · <span class="warn">{{ store.overflowing().size }} mimo arch</span>
+          · <span class="warn">{{ store.overflowing().size }} mimo stránky</span>
         }
       </p>
     }
   </div>
+</aside>
 
+<main>
   @if (store.source()) {
     <section class="workarea" aria-label="Rozložení">
       <div class="selection" aria-label="Vybraný dílek" role="toolbar">

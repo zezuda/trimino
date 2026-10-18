@@ -1,7 +1,33 @@
-import { Component, ElementRef, afterNextRender, computed, inject, linkedSignal, signal, viewChild, Injector } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Point, distance } from '../core/geometry';
 import { LayoutStore } from '../core/layout.store';
-import { MM, Piece, Placement, SCALE_PERCENT, SheetRect, scalePercent, sheetIndexAt } from '../core/models';
+import { HEADER_FONT_FAMILY, loadHeaderFontFace } from '../core/header-font';
+import {
+  HEADER,
+  MAX_SHEETS,
+  MM,
+  Piece,
+  Placement,
+  SCALE_PERCENT,
+  SHEET_GAP,
+  SheetRect,
+  hasHeader,
+  headerSize,
+  scalePercent,
+  sheetIndexAt,
+} from '../core/models';
 import { PIECE_KIND } from '../core/piece-kind';
 import { placedShape } from '../core/placement';
 
@@ -10,6 +36,8 @@ const SNAP_PX = 12;
 const ROTATE_SNAP_DEG = 15;
 /** Below this many screen pixels a background drag counts as a click. */
 const CLICK_PX = 3;
+/** Height of the "add a page" button below the last sheet, in points. */
+const ADD_SHEET_HEIGHT = 18 * MM;
 /** Margin kept around pieces lying outside the sheet, in points. */
 const VIEW_MARGIN = 10 * MM;
 
@@ -54,6 +82,9 @@ export class Artboard {
   protected readonly kind = inject(PIECE_KIND);
   private readonly injector = inject(Injector);
   private readonly svg = viewChild.required<ElementRef<SVGSVGElement>>('svg');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** Space for the drawing inside the scrolling host, in CSS pixels; 0 until measured. */
+  private readonly viewport = signal({ width: 0, height: 0 });
   private drag: Drag | null = null;
 
   protected readonly marquee = signal<Rect | null>(null);
@@ -61,28 +92,73 @@ export class Artboard {
   protected readonly guides = signal<{ sheet: SheetRect | null; vertical: boolean; horizontal: boolean }>(NO_GUIDES);
 
   protected readonly pieces = computed(() => this.store.source()?.pieces ?? []);
+
+  protected readonly HEADER = HEADER;
+  /** Where the "add a page" button goes, below the last sheet; null once no more can be added. */
+  protected readonly addSheetBox = computed(() => {
+    const last = this.store.sheets().at(-1)!;
+    return this.store.sheetCount() < MAX_SHEETS
+      ? { x: last.x, y: last.y + last.height + SHEET_GAP, width: last.width, height: ADD_SHEET_HEIGHT }
+      : null;
+  });
+  protected readonly HEADER_FONT_FAMILY = HEADER_FONT_FAMILY;
+  /** Set once the header font is in the page, so the preview can be measured with it. */
+  private readonly headerFontReady = signal(false);
+  private readonly measure = document.createElement('canvas').getContext('2d');
+  /** Header as previewed on each sheet (null where it is not printed), sized like the export. */
+  protected readonly headers = computed(() => {
+    const header = this.store.header();
+    const text = header.text.trim();
+    let width1 = 0;
+    if (text && this.headerFontReady() && this.measure) {
+      this.measure.font = `100px "${HEADER_FONT_FAMILY}"`;
+      width1 = this.measure.measureText(text).width / 100;
+    }
+    return this.store.sheets().map((r, k) => (hasHeader(header, k) ? { text, size: headerSize(width1, r.width) } : null));
+  });
+
+  constructor() {
+    const observer = new ResizeObserver(([entry]) =>
+      this.viewport.set({ width: entry.contentRect.width, height: entry.contentRect.height }),
+    );
+    observer.observe(this.host.nativeElement);
+    inject(DestroyRef).onDestroy(() => observer.disconnect());
+
+    effect(() => {
+      if (this.store.header().text.trim() && !this.headerFontReady()) {
+        loadHeaderFontFace().then(
+          () => this.headerFontReady.set(true),
+          (e) => console.error(e), // the preview falls back to the page font
+        );
+      }
+    });
+  }
   protected readonly sheetLabel = computed(() => {
     const { width, height } = this.store.sheet();
     const n = this.store.sheetCount();
-    return `${n === 1 ? 'Arch' : `${n} archy`} ${Math.round(width / MM)} × ${Math.round(height / MM)} mm`;
+    return `${n === 1 ? 'Stránka' : `${n} stránky`} ${Math.round(width / MM)} × ${Math.round(height / MM)} mm`;
   });
   /** True while a pointer drag runs; the view is not refitted then, so the zoom stays put. */
   private readonly dragging = signal(false);
   /**
-   * The sheets plus every piece lying outside them (e.g. the further pages of a multi-page
+   * The sheets (with the button below them) plus every piece lying outside them (e.g. the further pages of a multi-page
    * PDF, which start beside the sheet), so all pieces stay visible and reachable.
    */
-  protected readonly viewBox = linkedSignal({
+  private readonly bounds = linkedSignal<
+    { dragging: boolean; last: SheetRect; add: Rect | null; pieces: readonly Piece[]; placements: readonly Placement[] },
+    Rect
+  >({
     source: () => ({
       dragging: this.dragging(),
       last: this.store.sheets().at(-1)!,
+      add: this.addSheetBox(),
       pieces: this.pieces(),
       placements: this.store.placements(),
     }),
-    computation: ({ dragging, last, pieces, placements }, previous?: { value: string }) => {
+    computation: ({ dragging, last, add, pieces, placements }, previous) => {
       if (dragging && previous) return previous.value;
       const width = last.width;
-      const height = last.y + last.height;
+      const height = add ? add.y + add.height : last.y + last.height;
       let [minX, minY, maxX, maxY] = [0, 0, width, height];
       for (const p of placements) {
         for (const v of placedShape(pieces[p.index], p)) {
@@ -96,9 +172,38 @@ export class Artboard {
       if (minY > -VIEW_MARGIN) minY = 0;
       if (maxX < width + VIEW_MARGIN) maxX = width;
       if (maxY < height + VIEW_MARGIN) maxY = height;
-      return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     },
   });
+  protected readonly viewBox = computed(() => {
+    const b = this.bounds();
+    return `${b.x} ${b.y} ${b.width} ${b.height}`;
+  });
+  /**
+   * Screen pixels per point. One page (with the add button) fits the height of the board and
+   * everything fits its width; further pages extend the drawing downwards and the board
+   * scrolls, so adding a page does not shrink the others.
+   */
+  private readonly zoom = linkedSignal<{ dragging: boolean; width: number; view: { width: number; height: number } }, number>({
+    source: () => ({ dragging: this.dragging(), width: this.bounds().width, view: this.viewport() }),
+    computation: ({ dragging, width, view }, previous) => {
+      if (dragging && previous) return previous.value;
+      if (!view.width || !view.height) return 1;
+      const page = this.store.sheet().height + SHEET_GAP + ADD_SHEET_HEIGHT; // one page and the button below it
+      return Math.min(view.width / width, view.height / page);
+    },
+  });
+  /** Size of the drawing in CSS pixels. */
+  protected readonly size = computed(() => ({
+    width: Math.floor(this.bounds().width * this.zoom()),
+    height: Math.floor(this.bounds().height * this.zoom()),
+  }));
+
+  /** Adds a page from the button on the board and scrolls to it. */
+  protected addSheet(button: Element): void {
+    this.store.addSheet(1);
+    afterNextRender(() => button.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), { injector: this.injector });
+  }
 
   protected transform(p: Placement): string {
     return `translate(${p.x} ${p.y}) rotate(${p.rotation})`;

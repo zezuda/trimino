@@ -1,12 +1,20 @@
+/*
+ * Fills the board and scrolls when the pages are taller than it (see Artboard.zoom).
+ * Positioned so the visually hidden help text stays inside it instead of stretching the page.
+ */
 :host {
+  position: relative;
   display: block;
+  height: 100%;
+  padding: 16px;
+  overflow: auto;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
 }
 
 .sheet {
   display: block;
-  width: 100%;
-  height: auto;
-  max-height: 85vh;
+  margin: 0 auto;
   touch-action: none;
   user-select: none;
   overflow: visible;
@@ -60,6 +68,51 @@
   font: 600 20px system-ui, sans-serif;
   text-anchor: end;
   fill: var(--muted);
+  pointer-events: none;
+}
+
+/* Button below the last sheet that adds another one. */
+.add-sheet {
+  cursor: pointer;
+  outline: none;
+}
+
+.add-sheet rect {
+  fill: transparent;
+  stroke: var(--border);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.add-sheet text {
+  font: 600 26px system-ui, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: var(--muted);
+}
+
+.add-sheet:hover rect,
+.add-sheet:focus-visible rect {
+  fill: var(--surface);
+  stroke: var(--accent);
+}
+
+.add-sheet:hover text,
+.add-sheet:focus-visible text {
+  fill: var(--accent);
+}
+
+.add-sheet:focus-visible rect {
+  stroke-width: 3;
+}
+
+/* Preview of the printed header; pieces go over it, as in the export. */
+.sheet-header {
+  font-weight: 700;
+  text-anchor: middle;
+  white-space: pre;
+  fill: var(--fg);
   pointer-events: none;
 }
 

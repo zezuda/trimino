@@ -1,30 +1,40 @@
+/*
+ * Settings in a sidebar on the left, the board taking all the rest of the window.
+ * Below 800 px the sidebar goes on top and the page scrolls.
+ */
 :host {
-  display: block;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 16px 32px;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+}
+
+.sidebar {
+  position: relative; /* contains the visually hidden file inputs when it scrolls */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  background: var(--surface);
 }
 
 .top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
-  padding: 16px 0 12px;
+  padding-bottom: 4px;
 }
 
 .modules {
   display: flex;
-  gap: 4px 16px;
+  gap: 4px 14px;
 }
 
 .modules a {
   display: inline-block;
-  padding: 2px 0;
   border-bottom: 3px solid transparent;
   color: var(--muted);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   text-decoration: none;
 }
@@ -38,29 +48,15 @@
   color: var(--fg);
 }
 
-.file {
-  color: var(--muted);
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-}
-
-.controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
-}
-
-.panel {
+.section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: var(--surface);
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-soft);
 }
 
-.panel-title {
+.section-title {
   margin: 0;
   color: var(--muted);
   font-size: 0.75rem;
@@ -73,16 +69,24 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .row-label {
+  min-width: 4.5em;
   color: var(--muted);
 }
 
 .grow {
-  flex: 1 1 8em;
+  flex: 1 1 6em;
   min-width: 0;
+}
+
+.file {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }
 
 /* Buttons sharing their borders, for closely related actions. */
@@ -119,7 +123,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 4px;
   color: var(--muted);
   cursor: pointer;
@@ -136,14 +140,34 @@
   outline-offset: 1px;
 }
 
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .count {
-  min-width: 4.5em;
+  min-width: 2em;
+  font-weight: 600;
   text-align: center;
 }
 
+.size input {
+  width: 5em;
+}
+
 .messages {
-  min-height: 1.5em;
-  margin: 12px 0 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 0.875rem;
 }
 
 .messages p {
@@ -159,11 +183,18 @@
   font-weight: 600;
 }
 
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .workarea {
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: var(--surface);
-  overflow: hidden;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Tools for the selected pieces, at the top of the board. */
@@ -171,10 +202,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  min-height: 44px;
-  padding: 6px 12px;
+  gap: 6px 12px;
+  min-height: 48px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
 }
 
 .selected-label {
@@ -182,17 +214,32 @@
 }
 
 .tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding-left: 12px;
   border-left: 1px solid var(--border-soft);
 }
 
+.angle input,
+.scale input {
+  width: 5em;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+/* The board fills the rest of the window; the artboard fits its sheets into it. */
 .board {
-  padding: 24px;
+  flex: 1;
+  min-height: 0;
   background: var(--board);
 }
 
 .empty {
-  padding: 64px 24px;
+  margin: auto;
+  padding: 64px 32px;
   border: 2px dashed var(--border);
   border-radius: 10px;
   color: var(--muted);
@@ -208,29 +255,28 @@
   font-size: 1.1rem;
 }
 
-.tool,
-.sheets {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
+@media (max-width: 800px) {
+  :host {
+    display: block;
+    height: auto;
+  }
 
-.custom-size {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
 
-.size input {
-  width: 5em;
-}
+  .messages {
+    margin-top: 0;
+  }
 
-.angle input,
-.scale input {
-  width: 5em;
-}
+  .board {
+    height: 75vh;
+    height: 75dvh;
+    flex: none;
+  }
 
-.hint {
-  color: var(--muted);
+  .empty {
+    margin: 16px;
+  }
 }

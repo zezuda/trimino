@@ -2,6 +2,8 @@
   #svg
   class="sheet"
   [attr.viewBox]="viewBox()"
+  [attr.width]="size().width"
+  [attr.height]="size().height"
   role="group"
   [attr.aria-label]="sheetLabel()"
   aria-describedby="artboard-help"
@@ -12,9 +14,34 @@
 >
   @for (r of store.sheets(); track $index) {
     <rect class="paper" [attr.x]="r.x" [attr.y]="r.y" [attr.width]="r.width" [attr.height]="r.height" />
+    @if (headers()[$index]; as h) {
+      <text
+        class="sheet-header"
+        aria-hidden="true"
+        [attr.x]="r.x + r.width / 2"
+        [attr.y]="r.y + HEADER.baseline"
+        [attr.font-size]="h.size"
+        [style.font-family]="'&quot;' + HEADER_FONT_FAMILY + '&quot;, sans-serif'"
+      >{{ h.text }}</text>
+    }
     @if (store.sheetCount() > 1) {
       <text class="sheet-number" aria-hidden="true" [attr.x]="r.x - 8" [attr.y]="r.y + 18">{{ $index + 1 }}</text>
     }
+  }
+
+  @if (addSheetBox(); as a) {
+    <g
+      #addButton
+      class="add-sheet"
+      role="button"
+      tabindex="0"
+      (click)="addSheet(addButton)"
+      (keydown.enter)="addSheet(addButton)"
+      (keydown.space)="$event.preventDefault(); addSheet(addButton)"
+    >
+      <rect [attr.x]="a.x" [attr.y]="a.y" [attr.width]="a.width" [attr.height]="a.height" rx="8" />
+      <text [attr.x]="a.x + a.width / 2" [attr.y]="a.y + a.height / 2">+ Přidat stránku</text>
+    </g>
   }
 
   @for (p of store.placements(); track p.index) {

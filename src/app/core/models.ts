@@ -102,6 +102,26 @@ export interface SheetSize {
   readonly height: number;
 }
 
+/** Line of text printed at the top of the sheets. */
+export interface SheetHeader {
+  readonly text: string;
+  /** Unchecked leaves the first sheet without it (e.g. when it has a title of its own). */
+  readonly onFirstPage: boolean;
+}
+
+/** Header type size (pt), its baseline below the sheet top and the side margins it keeps. */
+export const HEADER = { size: 14, baseline: 12 * MM, margin: 10 * MM, maxLength: 120 } as const;
+
+/** Whether sheet `k` (0-based) gets the header. */
+export function hasHeader(header: SheetHeader, k: number): boolean {
+  return header.text.trim() !== '' && (k > 0 || header.onFirstPage);
+}
+
+/** Type size that fits the header between the margins, given its width at size 1. */
+export function headerSize(widthAtSize1: number, sheetWidth: number): number {
+  return widthAtSize1 > 0 ? Math.min(HEADER.size, (sheetWidth - 2 * HEADER.margin) / widthAtSize1) : HEADER.size;
+}
+
 /** Most output sheets one layout can have. */
 export const MAX_SHEETS = 20;
 /** Space between output sheets stacked on the board, in points. */

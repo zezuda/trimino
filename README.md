@@ -26,6 +26,10 @@ npm run build      # static files in dist/trimino/browser
 
 ## How to use
 
+All settings are in the sidebar on the left (on narrow screens above the board); the board with the
+pages takes the rest of the window. The zoom fits one page into the board's height; further pages
+extend the board downwards and it scrolls, so adding pages does not make them smaller.
+
 1. **Nahrát PDF** – the triangles are detected and shown on the sheet where they were in the original,
    each with its number (the number is not printed). Several files can be picked at once, and once
    something is loaded the button becomes **Přidat PDF**: the pieces of further files are added to the
@@ -49,15 +53,21 @@ npm run build      # static files in dist/trimino/browser
      sizes the field is empty and ± changes each piece by 5 %;
    - **Ctrl/Cmd+Z** undoes the last change (moves, rotations, sheet size, template, reset),
      **Ctrl/Cmd+Shift+Z** or **Ctrl+Y** redoes it. Held arrow keys count as one step;
-   - the bar above the sheet does the same with buttons (±60° / ±90°, exact angle for a single piece, 5 mm nudges).
-   Pieces reaching outside the sheet get a red dashed outline and are counted as "mimo arch".
-3. **Arch** – paper size: A5, A4, A3, Letter or **Vlastní** (custom width × height in mm, 50–1500 mm).
+   - the bar above the board does the same with buttons (±60° / ±90°, exact angle for a single piece, 5 mm nudges).
+   Pieces not lying wholly on one page get a red dashed outline and are counted as "mimo stránky".
+3. **Stránky** – paper size: A5, A4, A3, Letter or **Vlastní** (custom width × height in mm, 50–1500 mm).
    **Na výšku / Na šířku** – orientation (for a custom size it swaps width and height). Changing the
    sheet keeps the layout centred. **Původní rozložení** – back to the original positions.
-   **− / +** next to the size removes / adds a sheet (1–20, all of the same size): the sheets are stacked
-   top to bottom on the board, numbered at their top left, and each one becomes one page of the export.
-   Removing a sheet leaves its pieces where they were (now "mimo arch").
-4. **Stáhnout PDF** – vector PDF of the sheets, one page per sheet; a piece reaching over a sheet's edge
+   **Počet − / +** removes / adds a page (1–20, all of the same size); **+ Přidat stránku** below the last
+   page on the board adds one too. The pages are stacked top to bottom on the board, numbered at their
+   top left, and each one becomes one page of the export. Removing a page leaves its pieces where they
+   were (now "mimo stránky").
+4. **Záhlaví** – a line of text set centred at the top of every exported sheet (bold, 14 pt, shrunk to fit
+   between 10 mm margins; the board previews it). Untick **Zahrnout na první stránku** to leave it off the
+   first sheet. Pieces lying over it cover it. The header is not stored in templates. It uses DejaVu Sans
+   Bold cut down to Latin incl. Czech (`public/fonts`, Bitstream Vera licence in `LICENSE-DejaVu.txt`),
+   as the PDF standard fonts cannot write č, ř, ž; it is fetched only once a header is typed.
+5. **Stáhnout PDF** – vector PDF of the sheets, one page per sheet; a piece reaching over a sheet's edge
    is cut there, pieces lying off every sheet are left out. **Stáhnout JPG** – the same rendered at 300 DPI, one file per sheet
    (lower for very large custom sheets, to stay within browser canvas limits); the DPI is written into
    the file. Print either at **100 % / actual size**, not "fit to page", or the pieces won't match the

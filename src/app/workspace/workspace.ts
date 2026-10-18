@@ -2,7 +2,7 @@ import { Component, Injector, afterNextRender, computed, inject, signal } from '
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Artboard } from '../artboard/artboard';
 import { LayoutStore } from '../core/layout.store';
-import { CUSTOM_MM, MAX_SHEETS, MM, Orientation, PAPER_PRESETS, PaperPreset, SCALE_PERCENT, scalePercent } from '../core/models';
+import { CUSTOM_MM, HEADER, MAX_SHEETS, MM, Orientation, PAPER_PRESETS, PaperPreset, SCALE_PERCENT, scalePercent } from '../core/models';
 import { JpgExportService } from '../core/jpg-export.service';
 import { PdfExportService } from '../core/pdf-export.service';
 import { PdfLoadError, PdfSourceService } from '../core/pdf-source.service';
@@ -52,6 +52,7 @@ export class Workspace {
   }));
   protected readonly NUDGE_MM = NUDGE_MM;
   protected readonly MAX_SHEETS = MAX_SHEETS;
+  protected readonly HEADER = HEADER;
   protected readonly SCALE_PERCENT = SCALE_PERCENT;
   protected readonly fileNames = computed(() => this.store.source()?.files.map((f) => f.fileName).join(', ') ?? '');
   /** Size of the selected pieces in percent, or null when they differ. */
@@ -241,7 +242,12 @@ export class Workspace {
     this.busy.set(true);
     this.error.set('');
     try {
-      const pdf = await this.pdfExport.export(source, this.store.placements(), this.store.sheets());
+      const pdf = await this.pdfExport.export(
+        source,
+        this.store.placements(),
+        this.store.sheets(),
+        this.store.header(),
+      );
       const name = `${source.files[0].fileName.replace(/\.pdf$/i, '')}-rozlozeni`;
       if (format === 'pdf') {
         download(new Blob([pdf as BlobPart], { type: 'application/pdf' }), `${name}.pdf`);

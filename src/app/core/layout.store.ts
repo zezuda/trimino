@@ -7,6 +7,7 @@ import {
   Orientation,
   PaperPreset,
   Placement,
+  SheetHeader,
   SheetSize,
   SheetSpec,
   SourceDocument,
@@ -47,6 +48,11 @@ export class LayoutStore {
   readonly customSize = signal<SheetSize>(presetSize('A4', 'portrait'));
   /** Number of output sheets (pages of the exported PDF), stacked top to bottom. */
   readonly sheetCount = signal(1);
+  /**
+   * Text printed at the top of the exported sheets. Not part of templates (it usually names
+   * the particular worksheet) nor of undo (the text field has its own).
+   */
+  readonly header = signal<SheetHeader>({ text: '', onFirstPage: true });
   /** Array order is the stacking order (last = on top). */
   readonly placements = signal<readonly Placement[]>([]);
   readonly selection = signal<ReadonlySet<number>>(new Set());
