@@ -7,9 +7,11 @@
 
 .top {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 16px;
-  padding: 16px 0 8px;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 16px 0 12px;
 }
 
 .modules {
@@ -38,37 +40,110 @@
 
 .file {
   color: var(--muted);
+  font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
 
 .controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
 }
 
-.group {
+.panel {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.panel-title {
   margin: 0;
-  padding: 0;
-  border: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.save {
+.row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
+}
+
+.row-label {
+  color: var(--muted);
+}
+
+.grow {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+/* Buttons sharing their borders, for closely related actions. */
+.joined {
+  display: inline-flex;
+}
+
+.joined > .btn:not(:first-child) {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.joined > .btn:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.joined > .btn:hover:not(:disabled, .disabled) {
+  position: relative;
+}
+
+/* Radio buttons shown as a two-way switch. */
+.segmented {
+  display: inline-flex;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.segmented label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmented label:has(:checked) {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+}
+
+.segmented label:has(:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.count {
+  min-width: 4.5em;
+  text-align: center;
 }
 
 .messages {
   min-height: 1.5em;
-  margin: 12px 0 4px;
+  margin: 12px 0 8px;
 }
 
 .messages p {
@@ -84,25 +159,71 @@
   font-weight: 600;
 }
 
+.workarea {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* Tools for the selected pieces, at the top of the board. */
 .selection {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 8px 12px;
   min-height: 44px;
-  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
-.nudge,
-.resize,
+.selected-label {
+  min-width: 5.5em;
+}
+
+.tool {
+  padding-left: 12px;
+  border-left: 1px solid var(--border-soft);
+}
+
+.board {
+  padding: 24px;
+  background: var(--board);
+}
+
+.empty {
+  padding: 64px 24px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty p {
+  margin: 0 0 4px;
+}
+
+.empty strong {
+  color: var(--fg);
+  font-size: 1.1rem;
+}
+
+.tool,
 .sheets {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
+.custom-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .size input {
-  width: 5.5em;
+  width: 5em;
 }
 
 .angle input,
@@ -112,11 +233,4 @@
 
 .hint {
   color: var(--muted);
-}
-
-.radio {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
 }

@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, Injector, afterNextRender, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Artboard } from '../artboard/artboard';
 import { LayoutStore } from '../core/layout.store';
@@ -31,6 +31,7 @@ export class Workspace {
   private readonly pdfSource = inject(PdfSourceService);
   private readonly pdfExport = inject(PdfExportService);
   private readonly jpgExport = inject(JpgExportService);
+  private readonly injector = inject(Injector);
 
   protected readonly busy = signal(false);
   protected readonly status = signal('');
@@ -147,6 +148,8 @@ export class Workspace {
   protected startSave(): void {
     this.templateName.set(this.templates.active()?.name ?? '');
     this.saving.set(true);
+    // The name field replaces the button that was clicked, so focus moves into it.
+    afterNextRender(() => document.getElementById('template-name')?.focus(), { injector: this.injector });
   }
 
   protected saveTemplate(event: Event): void {

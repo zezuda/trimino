@@ -2,7 +2,9 @@
   <h1 class="visually-hidden">{{ kind.title }}</h1>
   <nav class="modules" aria-label="Druh dílků">
     @for (k of kinds; track k.id) {
-      <a [routerLink]="'/' + k.id" routerLinkActive="active" ariaCurrentWhenActive="page">{{ k.title }}</a>
+      <a [routerLink]="'/' + k.id" routerLinkActive="active" ariaCurrentWhenActive="page">{{
+        k.title
+      }}</a>
     }
   </nav>
   @if (fileNames()) {
@@ -11,125 +13,231 @@
 </header>
 
 <main>
-  <section class="controls" aria-label="Ovládání">
-    <div class="group">
-      <label class="btn primary" [class.disabled]="busy()">
-        {{ store.source() ? 'Přidat PDF' : 'Nahrát PDF' }}
-        <input
-          #pdfInput
-          type="file"
-          accept="application/pdf,.pdf"
-          multiple
-          class="visually-hidden"
-          [disabled]="busy()"
-          (change)="onPdf(pdfInput)"
-        />
-      </label>
-      <button type="button" class="btn" [disabled]="!store.source() || busy()" (click)="downloadSheet('pdf')">
-        Stáhnout PDF
-      </button>
-      <button type="button" class="btn" [disabled]="!store.source() || busy()" (click)="downloadSheet('jpg')">
-        Stáhnout JPG
-      </button>
-      <button type="button" class="btn danger" [disabled]="!store.source() || busy()" (click)="deleteAll()">
-        Smazat vše
-      </button>
-    </div>
-
-    <div class="group">
-      <label for="template">Šablona</label>
-      <select id="template" [value]="templates.activeId() ?? ''" (change)="onTemplateChange(templateSelect.value)" #templateSelect>
-        <option value="">— žádná —</option>
-        @for (t of templates.templates(); track t.id) {
-          <option [value]="t.id" [selected]="t.id === templates.activeId()">{{ t.name }}</option>
-        }
-      </select>
-      <button type="button" class="btn" [disabled]="!store.source()" (click)="startSave()">Uložit</button>
-      <button type="button" class="btn" [disabled]="!templates.activeId()" (click)="exportTemplate()">Export</button>
-      <label class="btn">
-        Import
-        <input #jsonInput type="file" accept="application/json,.json" class="visually-hidden" (change)="importTemplate(jsonInput)" />
-      </label>
-      <button type="button" class="btn danger" [disabled]="!templates.activeId()" (click)="deleteTemplate()">Smazat</button>
-    </div>
-
-    <div class="group">
-      <label for="paper">Arch</label>
-      <select id="paper" #paper (change)="store.setPreset($any(paper.value))">
-        @for (p of presets; track p.value) {
-          <option [value]="p.value" [selected]="store.preset() === p.value">{{ p.label }}</option>
-        }
-      </select>
-      @if (store.preset() === 'custom') {
-        <label class="size">
-          <span class="visually-hidden">Šířka v mm</span>
+  <div class="controls">
+    <section class="panel" aria-labelledby="panel-files">
+      <h2 id="panel-files" class="panel-title">Soubory</h2>
+      <div class="row">
+        <label class="btn primary" [class.disabled]="busy()">
+          {{ store.source() ? 'Přidat PDF' : 'Nahrát PDF' }}
           <input
-            #w
-            type="number"
-            inputmode="decimal"
-            [min]="CUSTOM_MM.min"
-            [max]="CUSTOM_MM.max"
-            [value]="sheetMm().width"
-            (change)="setCustomSize(w.value, h.value)"
+            #pdfInput
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            class="visually-hidden"
+            [disabled]="busy()"
+            (change)="onPdf(pdfInput)"
           />
         </label>
-        <span aria-hidden="true">×</span>
-        <label class="size">
-          <span class="visually-hidden">Výška v mm</span>
+        <button
+          type="button"
+          class="btn danger"
+          [disabled]="!store.source() || busy()"
+          (click)="deleteAll()"
+        >
+          Smazat vše
+        </button>
+      </div>
+      <div class="row">
+        <span class="row-label">Stáhnout</span>
+        <span class="joined">
+          <button
+            type="button"
+            class="btn"
+            [disabled]="!store.source() || busy()"
+            (click)="downloadSheet('pdf')"
+          >
+            PDF
+          </button>
+          <button
+            type="button"
+            class="btn"
+            [disabled]="!store.source() || busy()"
+            (click)="downloadSheet('jpg')"
+          >
+            JPG
+          </button>
+        </span>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="panel-template">
+      <h2 id="panel-template" class="panel-title">Šablona</h2>
+      @if (saving()) {
+        <form class="row" (submit)="saveTemplate($event)">
+          <label for="template-name" class="visually-hidden">Název šablony</label>
           <input
-            #h
-            type="number"
-            inputmode="decimal"
-            [min]="CUSTOM_MM.min"
-            [max]="CUSTOM_MM.max"
-            [value]="sheetMm().height"
-            (change)="setCustomSize(w.value, h.value)"
+            id="template-name"
+            class="grow"
+            type="text"
+            maxlength="80"
+            required
+            autocomplete="off"
+            placeholder="Název šablony"
+            [value]="templateName()"
+            (input)="templateName.set(nameInput.value)"
+            #nameInput
           />
-          mm
-        </label>
+          <button type="submit" class="btn primary">Uložit</button>
+          <button type="button" class="btn" (click)="saving.set(false)">Zrušit</button>
+        </form>
+      } @else {
+        <div class="row">
+          <label for="template" class="visually-hidden">Aktivní šablona</label>
+          <select
+            id="template"
+            class="grow"
+            [value]="templates.activeId() ?? ''"
+            (change)="onTemplateChange(templateSelect.value)"
+            #templateSelect
+          >
+            <option value="">— žádná —</option>
+            @for (t of templates.templates(); track t.id) {
+              <option [value]="t.id" [selected]="t.id === templates.activeId()">
+                {{ t.name }}
+              </option>
+            }
+          </select>
+          <button type="button" class="btn" [disabled]="!store.source()" (click)="startSave()">
+            Uložit
+          </button>
+        </div>
       }
-      <span class="sheets" role="group" aria-label="Počet archů">
-        <button type="button" class="btn icon" [disabled]="store.sheetCount() <= 1" (click)="store.addSheet(-1)" aria-label="Odebrat poslední arch">−</button>
-        <span aria-live="polite">{{ store.sheetCount() }}&nbsp;{{ store.sheetCount() === 1 ? 'arch' : store.sheetCount() <= 4 ? 'archy' : 'archů' }}</span>
-        <button type="button" class="btn icon" [disabled]="store.sheetCount() >= MAX_SHEETS" (click)="store.addSheet(1)" aria-label="Přidat arch">+</button>
-      </span>
-    </div>
+      <div class="row">
+        <span class="joined">
+          <button
+            type="button"
+            class="btn"
+            [disabled]="!templates.activeId()"
+            (click)="exportTemplate()"
+          >
+            Export
+          </button>
+          <label class="btn">
+            Import
+            <input
+              #jsonInput
+              type="file"
+              accept="application/json,.json"
+              class="visually-hidden"
+              (change)="importTemplate(jsonInput)"
+            />
+          </label>
+        </span>
+        <button
+          type="button"
+          class="btn danger"
+          [disabled]="!templates.activeId()"
+          (click)="deleteTemplate()"
+        >
+          Smazat
+        </button>
+      </div>
+    </section>
 
-    <fieldset class="group">
-      <legend class="visually-hidden">Orientace</legend>
-      @for (o of [{ v: 'portrait', l: 'Na výšku' }, { v: 'landscape', l: 'Na šířku' }]; track o.v) {
-        <label class="radio">
-          <input
-            type="radio"
-            name="orientation"
-            [value]="o.v"
-            [checked]="store.orientation() === o.v"
-            (change)="setOrientation($any(o.v))"
-          />
-          {{ o.l }}
-        </label>
-      }
-      <button type="button" class="btn" [disabled]="!store.source()" (click)="store.resetLayout()">Původní rozložení</button>
-    </fieldset>
-  </section>
-
-  @if (saving()) {
-    <form class="save" (submit)="saveTemplate($event)">
-      <label for="template-name">Název šablony</label>
-      <input
-        id="template-name"
-        type="text"
-        maxlength="80"
-        required
-        autocomplete="off"
-        [value]="templateName()"
-        (input)="templateName.set(nameInput.value)"
-        #nameInput
-      />
-      <button type="submit" class="btn primary">Uložit</button>
-      <button type="button" class="btn" (click)="saving.set(false)">Zrušit</button>
-    </form>
-  }
+    <section class="panel" aria-labelledby="panel-sheet">
+      <h2 id="panel-sheet" class="panel-title">Arch</h2>
+      <div class="row">
+        <label for="paper" class="visually-hidden">Velikost papíru</label>
+        <select id="paper" #paper (change)="store.setPreset($any(paper.value))">
+          @for (p of presets; track p.value) {
+            <option [value]="p.value" [selected]="store.preset() === p.value">{{ p.label }}</option>
+          }
+        </select>
+        @if (store.preset() === 'custom') {
+          <span class="custom-size">
+            <label class="size">
+              <span class="visually-hidden">Šířka v mm</span>
+              <input
+                #w
+                type="number"
+                inputmode="decimal"
+                [min]="CUSTOM_MM.min"
+                [max]="CUSTOM_MM.max"
+                [value]="sheetMm().width"
+                (change)="setCustomSize(w.value, h.value)"
+              />
+            </label>
+            <span aria-hidden="true">×</span>
+            <label class="size">
+              <span class="visually-hidden">Výška v mm</span>
+              <input
+                #h
+                type="number"
+                inputmode="decimal"
+                [min]="CUSTOM_MM.min"
+                [max]="CUSTOM_MM.max"
+                [value]="sheetMm().height"
+                (change)="setCustomSize(w.value, h.value)"
+              />
+              mm
+            </label>
+          </span>
+        }
+      </div>
+      <div class="row">
+        <fieldset class="segmented">
+          <legend class="visually-hidden">Orientace</legend>
+          @for (
+            o of [
+              { v: 'portrait', l: 'Na výšku' },
+              { v: 'landscape', l: 'Na šířku' },
+            ];
+            track o.v
+          ) {
+            <label>
+              <input
+                type="radio"
+                name="orientation"
+                class="visually-hidden"
+                [value]="o.v"
+                [checked]="store.orientation() === o.v"
+                (change)="setOrientation($any(o.v))"
+              />
+              {{ o.l }}
+            </label>
+          }
+        </fieldset>
+        <span class="sheets" role="group" aria-label="Počet archů">
+          <span class="sheets" role="group" aria-label="Počet archů">
+            <button
+              type="button"
+              class="btn icon"
+              [disabled]="store.sheetCount() <= 1"
+              (click)="store.addSheet(-1)"
+              aria-label="Odebrat poslední arch"
+            >
+              −
+            </button>
+            <span class="count" aria-live="polite"
+              >{{ store.sheetCount() }}&nbsp;{{
+                store.sheetCount() === 1 ? 'arch' : store.sheetCount() <= 4 ? 'archy' : 'archů'
+              }}</span
+            >
+            <button
+              type="button"
+              class="btn icon"
+              [disabled]="store.sheetCount() >= MAX_SHEETS"
+              (click)="store.addSheet(1)"
+              aria-label="Přidat arch"
+            >
+              +
+            </button>
+          </span>
+        </span>
+      </div>
+      <div class="row">
+        <button
+          type="button"
+          class="btn"
+          [disabled]="!store.source()"
+          (click)="store.resetLayout()"
+        >
+          Původní rozložení
+        </button>
+      </div>
+    </section>
+  </div>
 
   <div class="messages" aria-live="polite">
     @if (busy()) {
@@ -147,44 +255,117 @@
   </div>
 
   @if (store.source()) {
-    <div class="selection" aria-label="Vybraný dílek" role="toolbar">
-      @if (store.selection().size) {
-        <strong>{{ selectionLabel() }}</strong>
-        <button type="button" class="btn icon" (click)="rotateSelected(-ROTATE_STEP)" [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doleva'">⟲</button>
-        <button type="button" class="btn icon" (click)="rotateSelected(ROTATE_STEP)" [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doprava'">⟳</button>
-        @if (selectedPlacement(); as p) {
-          <label class="angle">
-            <span class="visually-hidden">Otočení ve stupních</span>
-            <input #angle type="number" step="15" [value]="p.rotation" (change)="setRotation(angle.value)" />°
-          </label>
+    <section class="workarea" aria-label="Rozložení">
+      <div class="selection" aria-label="Vybraný dílek" role="toolbar">
+        @if (store.selection().size) {
+          <strong class="selected-label">{{ selectionLabel() }}</strong>
+          <span class="tool">
+            <button
+              type="button"
+              class="btn icon"
+              (click)="rotateSelected(-ROTATE_STEP)"
+              [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doleva'"
+            >
+              ⟲
+            </button>
+            <button
+              type="button"
+              class="btn icon"
+              (click)="rotateSelected(ROTATE_STEP)"
+              [attr.aria-label]="'Otočit o ' + ROTATE_STEP + '° doprava'"
+            >
+              ⟳
+            </button>
+            @if (selectedPlacement(); as p) {
+              <label class="angle">
+                <span class="visually-hidden">Otočení ve stupních</span>
+                <input
+                  #angle
+                  type="number"
+                  step="15"
+                  [value]="p.rotation"
+                  (change)="setRotation(angle.value)"
+                />°
+              </label>
+            }
+          </span>
+          <span class="tool resize">
+            <button
+              type="button"
+              class="btn icon"
+              (click)="resizeBy(-SCALE_PERCENT.step)"
+              [attr.aria-label]="'Zmenšit o ' + SCALE_PERCENT.step + ' %'"
+            >
+              −
+            </button>
+            <label class="scale">
+              <span class="visually-hidden">Velikost v procentech</span>
+              <input
+                #scale
+                type="number"
+                [step]="SCALE_PERCENT.step"
+                [min]="SCALE_PERCENT.min"
+                [max]="SCALE_PERCENT.max"
+                [value]="selectionScale() ?? ''"
+                placeholder="různé"
+                (change)="setScale(scale)"
+              />&nbsp;%
+            </label>
+            <button
+              type="button"
+              class="btn icon"
+              (click)="resizeBy(SCALE_PERCENT.step)"
+              [attr.aria-label]="'Zvětšit o ' + SCALE_PERCENT.step + ' %'"
+            >
+              +
+            </button>
+          </span>
+          <span class="tool nudge">
+            <button
+              type="button"
+              class="btn icon"
+              (click)="nudge(-1, 0)"
+              [attr.aria-label]="'Posunout doleva o ' + NUDGE_MM + ' mm'"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              class="btn icon"
+              (click)="nudge(0, -1)"
+              [attr.aria-label]="'Posunout nahoru o ' + NUDGE_MM + ' mm'"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="btn icon"
+              (click)="nudge(0, 1)"
+              [attr.aria-label]="'Posunout dolů o ' + NUDGE_MM + ' mm'"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              class="btn icon"
+              (click)="nudge(1, 0)"
+              [attr.aria-label]="'Posunout doprava o ' + NUDGE_MM + ' mm'"
+            >
+              →
+            </button>
+          </span>
+        } @else {
+          <span class="hint">Klikněte na dílek nebo táhněte myší přes víc dílků</span>
         }
-        <span class="resize">
-          <button type="button" class="btn icon" (click)="resizeBy(-SCALE_PERCENT.step)" [attr.aria-label]="'Zmenšit o ' + SCALE_PERCENT.step + ' %'">−</button>
-          <label class="scale">
-            <span class="visually-hidden">Velikost v procentech</span>
-            <input
-              #scale
-              type="number"
-              [step]="SCALE_PERCENT.step"
-              [min]="SCALE_PERCENT.min"
-              [max]="SCALE_PERCENT.max"
-              [value]="selectionScale() ?? ''"
-              placeholder="různé"
-              (change)="setScale(scale)"
-            />&nbsp;%
-          </label>
-          <button type="button" class="btn icon" (click)="resizeBy(SCALE_PERCENT.step)" [attr.aria-label]="'Zvětšit o ' + SCALE_PERCENT.step + ' %'">+</button>
-        </span>
-        <span class="nudge">
-          <button type="button" class="btn icon" (click)="nudge(-1, 0)" [attr.aria-label]="'Posunout doleva o ' + NUDGE_MM + ' mm'">←</button>
-          <button type="button" class="btn icon" (click)="nudge(0, -1)" [attr.aria-label]="'Posunout nahoru o ' + NUDGE_MM + ' mm'">↑</button>
-          <button type="button" class="btn icon" (click)="nudge(0, 1)" [attr.aria-label]="'Posunout dolů o ' + NUDGE_MM + ' mm'">↓</button>
-          <button type="button" class="btn icon" (click)="nudge(1, 0)" [attr.aria-label]="'Posunout doprava o ' + NUDGE_MM + ' mm'">→</button>
-        </span>
-      } @else {
-        <span class="hint">Vyberte dílky</span>
-      }
+      </div>
+      <div class="board">
+        <app-artboard />
+      </div>
+    </section>
+  } @else if (!busy()) {
+    <div class="empty">
+      <p><strong>Začněte nahráním PDF</strong></p>
+      <p>Dílky se v něm najdou samy. Je-li vybraná šablona, rovnou se podle ní rozloží.</p>
     </div>
-    <app-artboard />
   }
 </main>
