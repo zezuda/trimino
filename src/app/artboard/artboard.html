@@ -10,7 +10,12 @@
   (pointerup)="onPointerUp($event)"
   (pointercancel)="onPointerUp($event)"
 >
-  <rect class="paper" [attr.width]="store.sheet().width" [attr.height]="store.sheet().height" />
+  @for (r of store.sheets(); track $index) {
+    <rect class="paper" [attr.x]="r.x" [attr.y]="r.y" [attr.width]="r.width" [attr.height]="r.height" />
+    @if (store.sheetCount() > 1) {
+      <text class="sheet-number" aria-hidden="true" [attr.x]="r.x - 8" [attr.y]="r.y + 18">{{ $index + 1 }}</text>
+    }
+  }
 
   @for (p of store.placements(); track p.index) {
     @let piece = pieces()[p.index];
@@ -57,11 +62,13 @@
     </g>
   }
 
-  @if (guides().vertical) {
-    <line class="guide" [attr.x1]="store.sheet().width / 2" y1="0" [attr.x2]="store.sheet().width / 2" [attr.y2]="store.sheet().height" />
-  }
-  @if (guides().horizontal) {
-    <line class="guide" x1="0" [attr.y1]="store.sheet().height / 2" [attr.x2]="store.sheet().width" [attr.y2]="store.sheet().height / 2" />
+  @if (guides(); as g) {
+    @if (g.sheet && g.vertical) {
+      <line class="guide" [attr.x1]="g.sheet.x + g.sheet.width / 2" [attr.y1]="g.sheet.y" [attr.x2]="g.sheet.x + g.sheet.width / 2" [attr.y2]="g.sheet.y + g.sheet.height" />
+    }
+    @if (g.sheet && g.horizontal) {
+      <line class="guide" [attr.x1]="g.sheet.x" [attr.y1]="g.sheet.y + g.sheet.height / 2" [attr.x2]="g.sheet.x + g.sheet.width" [attr.y2]="g.sheet.y + g.sheet.height / 2" />
+    }
   }
   @if (marquee(); as m) {
     <rect class="marquee" [attr.x]="m.x" [attr.y]="m.y" [attr.width]="m.width" [attr.height]="m.height" />

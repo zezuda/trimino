@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { CUSTOM_MM, LayoutTemplate, MM, PAPER_PRESETS, Placement, SheetSpec, snapScale } from './models';
+import { CUSTOM_MM, LayoutTemplate, MAX_SHEETS, MM, PAPER_PRESETS, Placement, SheetSpec, snapScale } from './models';
 import { PIECE_KIND, PIECE_KINDS } from './piece-kind';
 
 const MAX_PIECES = 500;
@@ -109,6 +109,11 @@ function validate(v: unknown): LayoutTemplate | null {
   const sheet = validateSheet(o['sheet']);
   if (sheet === null) return null;
 
+  const sheetCount = o['sheetCount'];
+  if (sheetCount !== undefined && !(Number.isInteger(sheetCount) && (sheetCount as number) >= 1 && (sheetCount as number) <= MAX_SHEETS)) {
+    return null;
+  }
+
   const kind = PIECE_KINDS.find((k) => k.id === o['kind'])?.id;
   if (o['kind'] !== undefined && !kind) return null;
 
@@ -120,6 +125,7 @@ function validate(v: unknown): LayoutTemplate | null {
     name,
     orientation: o['orientation'],
     ...(sheet && { sheet }),
+    ...(sheetCount !== undefined && { sheetCount: sheetCount as number }),
     pieceCount: Number.isInteger(o['pieceCount']) ? (o['pieceCount'] as number) : placements.length,
     placements,
     createdAt: typeof o['createdAt'] === 'string' ? o['createdAt'].slice(0, 40) : new Date().toISOString(),

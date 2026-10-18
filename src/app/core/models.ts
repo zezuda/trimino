@@ -102,6 +102,27 @@ export interface SheetSize {
   readonly height: number;
 }
 
+/** Most output sheets one layout can have. */
+export const MAX_SHEETS = 20;
+/** Space between output sheets stacked on the board, in points. */
+export const SHEET_GAP = 10 * MM;
+
+/** An output sheet on the board, in sheet space. */
+export interface SheetRect extends SheetSize {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Output sheets of the same size stacked top to bottom: sheet `k` starts `k · (height + gap)` down. */
+export function sheetRects(size: SheetSize, count: number): SheetRect[] {
+  return Array.from({ length: count }, (_, k) => ({ x: 0, y: k * (size.height + SHEET_GAP), ...size }));
+}
+
+/** The sheet whose row a point at height `y` falls into (the first or last one beyond them). */
+export function sheetIndexAt(y: number, size: SheetSize, count: number): number {
+  return Math.min(count - 1, Math.max(0, Math.floor((y + SHEET_GAP / 2) / (size.height + SHEET_GAP))));
+}
+
 /** Sheet stored in a template: the preset and the resulting size in points. */
 export interface SheetSpec extends SheetSize {
   readonly preset: PaperPreset;
@@ -125,6 +146,8 @@ export interface LayoutTemplate {
   readonly orientation: Orientation;
   /** Paper; missing in templates saved before sizes existed, which means A4. */
   readonly sheet?: SheetSpec;
+  /** Output sheets, stacked top to bottom (see {@link sheetRects}); missing in older templates, which means 1. */
+  readonly sheetCount?: number;
   readonly pieceCount: number;
   /** Array order is the stacking order (last = on top). */
   readonly placements: readonly Placement[];

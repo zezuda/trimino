@@ -54,7 +54,11 @@ npm run build      # static files in dist/trimino/browser
 3. **Arch** – paper size: A5, A4, A3, Letter or **Vlastní** (custom width × height in mm, 50–1500 mm).
    **Na výšku / Na šířku** – orientation (for a custom size it swaps width and height). Changing the
    sheet keeps the layout centred. **Původní rozložení** – back to the original positions.
-4. **Stáhnout PDF** – vector PDF of the sheet. **Stáhnout JPG** – the same sheet rendered at 300 DPI
+   **− / +** next to the size removes / adds a sheet (1–20, all of the same size): the sheets are stacked
+   top to bottom on the board, numbered at their top left, and each one becomes one page of the export.
+   Removing a sheet leaves its pieces where they were (now "mimo arch").
+4. **Stáhnout PDF** – vector PDF of the sheets, one page per sheet; a piece reaching over a sheet's edge
+   is cut there, pieces lying off every sheet are left out. **Stáhnout JPG** – the same rendered at 300 DPI, one file per sheet
    (lower for very large custom sheets, to stay within browser canvas limits); the DPI is written into
    the file. Print either at **100 % / actual size**, not "fit to page", or the pieces won't match the
    original size.
@@ -66,8 +70,10 @@ npm run build      # static files in dist/trimino/browser
 - The active template (**Šablona** select) is applied automatically to every PDF you load afterwards,
   and immediately when you pick it.
 - A template stores, for every piece, its **index**, the position of its centre on the sheet (pt), its
-  **rotation** (degrees, clockwise) and its **scale** (1 = 100 %; missing in older templates = 100 %), plus the sheet orientation and paper size (templates saved before
-  paper sizes existed load as A4). Pieces are indexed in reading order of
+  **rotation** (degrees, clockwise) and its **scale** (1 = 100 %; missing in older templates = 100 %), plus the sheet orientation, paper size (templates saved before
+  paper sizes existed load as A4) and the number of sheets (`sheetCount`; missing = 1). Positions are
+  on the board, where the sheets are stacked, so a piece keeps its sheet. For a multi-page layout, load
+  the source PDFs in the same order as when the template was made: pieces are numbered across the files. Pieces are indexed in reading order of
   the source PDF (rows top to bottom, then left to right), so any PDF from the same generator with the
   same piece layout is reordered the same way. If the new PDF has more pieces than the template, the
   extra ones stay at their original positions; the status line then says how many were placed.

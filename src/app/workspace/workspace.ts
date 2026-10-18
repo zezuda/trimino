@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Artboard } from '../artboard/artboard';
 import { LayoutStore } from '../core/layout.store';
-import { CUSTOM_MM, MM, Orientation, PAPER_PRESETS, PaperPreset, SCALE_PERCENT, scalePercent } from '../core/models';
+import { CUSTOM_MM, MAX_SHEETS, MM, Orientation, PAPER_PRESETS, PaperPreset, SCALE_PERCENT, scalePercent } from '../core/models';
 import { JpgExportService } from '../core/jpg-export.service';
 import { PdfExportService } from '../core/pdf-export.service';
 import { PdfLoadError, PdfSourceService } from '../core/pdf-source.service';
@@ -50,6 +50,7 @@ export class Workspace {
     height: Math.round(this.store.sheet().height / MM),
   }));
   protected readonly NUDGE_MM = NUDGE_MM;
+  protected readonly MAX_SHEETS = MAX_SHEETS;
   protected readonly SCALE_PERCENT = SCALE_PERCENT;
   protected readonly fileNames = computed(() => this.store.source()?.files.map((f) => f.fileName).join(', ') ?? '');
   /** Size of the selected pieces in percent, or null when they differ. */
@@ -237,12 +238,18 @@ export class Workspace {
     this.busy.set(true);
     this.error.set('');
     try {
-      const pdf = await this.pdfExport.export(source, this.store.placements(), this.store.sheet());
-      const blob =
-        format === 'pdf'
-          ? new Blob([pdf as BlobPart], { type: 'application/pdf' })
-          : await this.jpgExport.export(pdf);
-      download(blob, `${source.files[0].fileName.replace(/\.pdf$/i, '')}-rozlozeni.${format}`);
+      const pdf = await this.pdfExport.export(source, this.store.placements(), this.store.sheets());
+      const name = `${source.files[0].fileName.replace(/\.pdf$/i, '')}-rozlozeni`;
+      if (format === 'pdf') {
+        download(new Blob([pdf as BlobPart], { type: 'application/pdf' }), `${name}.pdf`);
+      } else {
+        // One JPG per sheet; spaced out, as browsers drop rapid successive downloads.
+        const jpgs = await this.jpgExport.export(pdf);
+        for (const [i, jpg] of jpgs.entries()) {
+          if (i) await new Promise((resolve) => setTimeout(resolve, 300));
+          download(jpg, jpgs.length > 1 ? `${name}-${i + 1}.jpg` : `${name}.jpg`);
+        }
+      }
     } catch (e) {
       console.error(e);
       this.error.set(format === 'pdf' ? 'Vytvoření PDF selhalo.' : 'Vytvoření JPG selhalo.');

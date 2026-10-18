@@ -2,6 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import {
   CUSTOM_MM,
   LayoutTemplate,
+  MAX_SHEETS,
   MM,
   Orientation,
   PaperPreset,
@@ -12,8 +13,11 @@ import {
   appendDocument,
   presetSize,
   scalePercent,
+  sheetIndexAt,
+  sheetRects,
   snapScale,
 } from './models';
+import { Polygon } from './geometry';
 import { PieceKindId } from './piece-kind';
 import { normaliseAngle, placedShape } from './placement';
 
@@ -24,12 +28,13 @@ const HISTORY_LIMIT = 100;
 /** Repeated steps of the same kind (e.g. arrow nudges) closer than this merge into one undo step. */
 const MERGE_MS = 1000;
 
-/** Everything undo restores: the layout and the sheet it sits on. */
+/** Everything undo restores: the layout and the sheets it sits on. */
 interface Snapshot {
   readonly placements: readonly Placement[];
   readonly orientation: Orientation;
   readonly preset: PaperPreset;
   readonly customSize: SheetSize;
+  readonly sheetCount: number;
 }
 
 /** Current document, piece placements on the sheet and selection; one per module (see app.routes.ts). */
@@ -40,6 +45,8 @@ export class LayoutStore {
   readonly preset = signal<PaperPreset>('A4');
   /** Size used when `preset` is 'custom', in points (already oriented). */
   readonly customSize = signal<SheetSize>(presetSize('A4', 'portrait'));
+  /** Number of output sheets (pages of the exported PDF), stacked top to bottom. */
+  readonly sheetCount = signal(1);
   /** Array order is the stacking order (last = on top). */
   readonly placements = signal<readonly Placement[]>([]);
   readonly selection = signal<ReadonlySet<number>>(new Set());
@@ -54,18 +61,19 @@ export class LayoutStore {
     this.preset() === 'custom' ? this.customSize() : presetSize(this.preset() as Exclude<PaperPreset, 'custom'>, this.orientation()),
   );
 
-  /** Indexes of pieces reaching outside the sheet. */
+  /** Every output sheet with its place on the board. */
+  readonly sheets = computed(() => sheetRects(this.sheet(), this.sheetCount()));
+
+  /** Indexes of pieces not lying wholly on one sheet. */
   readonly overflowing = computed(() => {
     const src = this.source();
-    const { width, height } = this.sheet();
+    const sheets = this.sheets();
     if (!src) return new Set<number>();
-    return new Set(
-      this.placements()
-        .filter((p) =>
-          placedShape(src.pieces[p.index], p).some((v) => v.x < -0.5 || v.y < -0.5 || v.x > width + 0.5 || v.y > height + 0.5),
-        )
-        .map((p) => p.index),
-    );
+    const inside = (shape: Polygon) =>
+      sheets.some((r) =>
+        shape.every((v) => v.x >= r.x - 0.5 && v.y >= r.y - 0.5 && v.x <= r.x + r.width + 0.5 && v.y <= r.y + r.height + 0.5),
+      );
+    return new Set(this.placements().filter((p) => !inside(placedShape(src.pieces[p.index], p))).map((p) => p.index));
   });
 
   /**
@@ -145,6 +153,7 @@ export class LayoutStore {
     this.orientation.set(target.orientation);
     this.preset.set(target.preset);
     this.customSize.set(target.customSize);
+    this.sheetCount.set(target.sheetCount);
     return true;
   }
 
@@ -154,6 +163,7 @@ export class LayoutStore {
       orientation: this.orientation(),
       preset: this.preset(),
       customSize: this.customSize(),
+      sheetCount: this.sheetCount(),
     };
   }
 
@@ -207,6 +217,7 @@ export class LayoutStore {
     if (!doc) return 0;
     this.checkpoint();
     this.applySheet(t.sheet ?? { preset: 'A4', ...presetSize('A4', t.orientation) }, t.orientation);
+    this.sheetCount.set(t.sheetCount ?? 1);
     this.layOutPages();
     const fromTemplate = t.placements.filter((p) => p.index < doc.pieces.length);
     const used = new Set(fromTemplate.map((p) => p.index));
@@ -222,6 +233,7 @@ export class LayoutStore {
       name,
       orientation: this.orientation(),
       sheet: { preset: this.preset(), ...this.sheet() },
+      sheetCount: this.sheetCount(),
       pieceCount: this.source()?.pieces.length ?? 0,
       placements: this.placements(),
       createdAt: new Date().toISOString(),
@@ -263,20 +275,38 @@ export class LayoutStore {
     });
   }
 
+  /**
+   * Adds a sheet below the last one, or removes the last one; pieces lying on a removed
+   * sheet stay where they are (and show as outside the sheets).
+   */
+  addSheet(delta: 1 | -1): void {
+    const count = this.sheetCount() + delta;
+    if (count < 1 || count > MAX_SHEETS) return;
+    this.checkpoint();
+    this.sheetCount.set(count);
+  }
+
   private applySheet(spec: SheetSpec, o: Orientation): void {
     this.orientation.set(o);
     this.preset.set(spec.preset);
     if (spec.preset === 'custom') this.customSize.set({ width: spec.width, height: spec.height });
   }
 
-  /** Runs a sheet change, shifting pieces so the layout stays centred on the new sheet. */
+  /**
+   * Runs a sheet change, shifting pieces so the layout of each sheet stays centred on it
+   * (the sheets below move with a change of height).
+   */
   private keepCentred(change: () => void): void {
     const before = this.sheet();
     change();
     const after = this.sheet();
     const dx = (after.width - before.width) / 2;
-    const dy = (after.height - before.height) / 2;
-    if (dx || dy) this.placements.update((list) => list.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy })));
+    const dh = after.height - before.height;
+    if (!dx && !dh) return;
+    const count = this.sheetCount();
+    this.placements.update((list) =>
+      list.map((p) => ({ ...p, x: p.x + dx, y: p.y + (sheetIndexAt(p.y, before, count) + 0.5) * dh })),
+    );
   }
 
   update(index: number, change: Partial<Omit<Placement, 'index'>>): void {
@@ -388,6 +418,7 @@ function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
     a.preset === b.preset &&
     a.customSize.width === b.customSize.width &&
     a.customSize.height === b.customSize.height &&
+    a.sheetCount === b.sheetCount &&
     a.placements.length === b.placements.length &&
     a.placements.every((p, i) => {
       const q = b.placements[i];

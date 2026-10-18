@@ -88,6 +88,11 @@
           mm
         </label>
       }
+      <span class="sheets" role="group" aria-label="Počet archů">
+        <button type="button" class="btn icon" [disabled]="store.sheetCount() <= 1" (click)="store.addSheet(-1)" aria-label="Odebrat poslední arch">−</button>
+        <span aria-live="polite">{{ store.sheetCount() }}&nbsp;{{ store.sheetCount() === 1 ? 'arch' : store.sheetCount() <= 4 ? 'archy' : 'archů' }}</span>
+        <button type="button" class="btn icon" [disabled]="store.sheetCount() >= MAX_SHEETS" (click)="store.addSheet(1)" aria-label="Přidat arch">+</button>
+      </span>
     </div>
 
     <fieldset class="group">

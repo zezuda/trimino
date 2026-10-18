@@ -55,6 +55,14 @@
   stroke-dasharray: 6 4;
 }
 
+/* Sheet number (= page of the exported PDF) at the top left, outside the paper. */
+.sheet-number {
+  font: 600 20px system-ui, sans-serif;
+  text-anchor: end;
+  fill: var(--muted);
+  pointer-events: none;
+}
+
 /* Index badge so pieces can be told apart and matched with the template. */
 .badge {
   font: 600 12px system-ui, sans-serif;

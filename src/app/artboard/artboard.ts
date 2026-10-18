@@ -1,7 +1,7 @@
 import { Component, ElementRef, afterNextRender, computed, inject, linkedSignal, signal, viewChild, Injector } from '@angular/core';
 import { Point, distance } from '../core/geometry';
 import { LayoutStore } from '../core/layout.store';
-import { MM, Piece, Placement, SCALE_PERCENT, scalePercent } from '../core/models';
+import { MM, Piece, Placement, SCALE_PERCENT, SheetRect, scalePercent, sheetIndexAt } from '../core/models';
 import { PIECE_KIND } from '../core/piece-kind';
 import { placedShape } from '../core/placement';
 
@@ -12,6 +12,8 @@ const ROTATE_SNAP_DEG = 15;
 const CLICK_PX = 3;
 /** Margin kept around pieces lying outside the sheet, in points. */
 const VIEW_MARGIN = 10 * MM;
+
+const NO_GUIDES = { sheet: null, vertical: false, horizontal: false };
 
 type Drag =
   | { kind: 'move'; start: Point; origins: ReadonlyMap<number, Point>; pointerId: number }
@@ -55,30 +57,32 @@ export class Artboard {
   private drag: Drag | null = null;
 
   protected readonly marquee = signal<Rect | null>(null);
-  /** Which sheet centre lines the dragged selection is snapped to. */
-  protected readonly guides = signal({ vertical: false, horizontal: false });
+  /** Which centre lines of which sheet the dragged selection is snapped to. */
+  protected readonly guides = signal<{ sheet: SheetRect | null; vertical: boolean; horizontal: boolean }>(NO_GUIDES);
 
   protected readonly pieces = computed(() => this.store.source()?.pieces ?? []);
   protected readonly sheetLabel = computed(() => {
     const { width, height } = this.store.sheet();
-    return `Arch ${Math.round(width / MM)} × ${Math.round(height / MM)} mm`;
+    const n = this.store.sheetCount();
+    return `${n === 1 ? 'Arch' : `${n} archy`} ${Math.round(width / MM)} × ${Math.round(height / MM)} mm`;
   });
   /** True while a pointer drag runs; the view is not refitted then, so the zoom stays put. */
   private readonly dragging = signal(false);
   /**
-   * The sheet plus every piece lying outside it (e.g. the further pages of a multi-page
+   * The sheets plus every piece lying outside them (e.g. the further pages of a multi-page
    * PDF, which start beside the sheet), so all pieces stay visible and reachable.
    */
   protected readonly viewBox = linkedSignal({
     source: () => ({
       dragging: this.dragging(),
-      sheet: this.store.sheet(),
+      last: this.store.sheets().at(-1)!,
       pieces: this.pieces(),
       placements: this.store.placements(),
     }),
-    computation: ({ dragging, sheet, pieces, placements }, previous?: { value: string }) => {
+    computation: ({ dragging, last, pieces, placements }, previous?: { value: string }) => {
       if (dragging && previous) return previous.value;
-      const { width, height } = sheet;
+      const width = last.width;
+      const height = last.y + last.height;
       let [minX, minY, maxX, maxY] = [0, 0, width, height];
       for (const p of placements) {
         for (const v of placedShape(pieces[p.index], p)) {
@@ -167,7 +171,7 @@ export class Artboard {
 
     if (drag.kind === 'move') {
       let delta = { x: pt.x - drag.start.x, y: pt.y - drag.start.y };
-      if (e.altKey) this.guides.set({ vertical: false, horizontal: false });
+      if (e.altKey) this.guides.set(NO_GUIDES);
       else delta = this.snap(drag.origins, delta);
       const positions = new Map([...drag.origins].map(([i, o]) => [i, { x: o.x + delta.x, y: o.y + delta.y }]));
       this.store.setPositions(positions);
@@ -201,7 +205,7 @@ export class Artboard {
     this.drag = null;
     this.dragging.set(false);
     this.marquee.set(null);
-    this.guides.set({ vertical: false, horizontal: false });
+    this.guides.set(NO_GUIDES);
   }
 
   protected onPieceFocus(index: number): void {
@@ -236,8 +240,8 @@ export class Artboard {
 
   /**
    * Adjusts a group drag offset. Corner-to-corner snapping wins (it is what makes cut
-   * edges line up); otherwise the centre of the group's bounding box snaps to the sheet's
-   * vertical and/or horizontal centre line, each axis on its own.
+   * edges line up); otherwise the centre of the group's bounding box snaps to the vertical
+   * and/or horizontal centre line of the sheet it is over, each axis on its own.
    */
   private snap(origins: ReadonlyMap<number, Point>, delta: Point): Point {
     const pieces = this.pieces();
@@ -265,9 +269,10 @@ export class Artboard {
     const pts = best ? corners(next) : own;
     const xs = pts.map((p) => p.x);
     const ys = pts.map((p) => p.y);
-    const { width, height } = this.store.sheet();
-    const offX = width / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
-    const offY = height / 2 - (Math.min(...ys) + Math.max(...ys)) / 2;
+    const centreY = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const sheet = this.store.sheets()[sheetIndexAt(centreY, this.store.sheet(), this.store.sheetCount())];
+    const offX = sheet.x + sheet.width / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
+    const offY = sheet.y + sheet.height / 2 - centreY;
 
     // After a corner snap only report coincidental alignment; never pull the group off the corner.
     const tolerance = best ? 0.01 : threshold;
@@ -277,7 +282,7 @@ export class Artboard {
       if (vertical) next.x += offX;
       if (horizontal) next.y += offY;
     }
-    this.guides.set({ vertical, horizontal });
+    this.guides.set({ sheet, vertical, horizontal });
     return next;
   }
 
